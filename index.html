@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StarkOS</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{--bg:#0a0a0a;--accent:#c8f135;--surface:#141414;--border:#1e1e1e;--text:#e8e8e8;--muted:#555;}
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;overflow-x:hidden;}
+#splash{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.8s ease;}
+#splash.hide{opacity:0;pointer-events:none;}
+.splash-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(3rem,10vw,7rem);letter-spacing:0.1em;color:var(--accent);line-height:1;}
+.splash-sub{font-family:'DM Mono',monospace;font-size:clamp(0.6rem,2vw,0.85rem);letter-spacing:0.3em;color:var(--muted);margin-top:0.5rem;text-transform:uppercase;}
+.splash-bar{width:200px;height:2px;background:var(--border);margin-top:2rem;position:relative;overflow:hidden;}
+.splash-bar::after{content:'';position:absolute;left:-100%;top:0;height:100%;width:100%;background:var(--accent);animation:load 1.5s ease forwards;}
+@keyframes load{to{left:0;}}
+header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:0.75rem 1.25rem;display:flex;align-items:center;justify-content:space-between;}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--accent);letter-spacing:0.1em;}
+.clock{font-family:'DM Mono',monospace;font-size:0.85rem;color:var(--muted);}
+main{padding:1.25rem;padding-bottom:5rem;max-width:600px;margin:0 auto;}
+.section{display:none;}.section.active{display:block;}
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent);letter-spacing:0.1em;margin-bottom:1.25rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1rem;margin-bottom:0.75rem;}
+.card label{display:block;font-size:0.7rem;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;margin-bottom:0.4rem;}
+.card input[type="number"],.card input[type="text"],.card textarea,.card select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:0.5rem 0.75rem;border-radius:2px;font-family:'DM Mono',monospace;font-size:0.85rem;outline:none;transition:border-color 0.2s;}
+.card input:focus,.card textarea:focus,.card select:focus{border-color:var(--accent);}
+.card input[type="range"]{width:100%;accent-color:var(--accent);cursor:pointer;}
+.range-val{font-size:1.2rem;font-family:'Bebas Neue',sans-serif;color:var(--accent);float:right;margin-top:-1.5rem;}
+.toggle-row{display:flex;align-items:center;gap:0.75rem;}
+.toggle{position:relative;width:44px;height:24px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;inset:0;background:var(--border);border-radius:24px;cursor:pointer;transition:0.3s;}
+.toggle-slider::before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:var(--muted);border-radius:50%;transition:0.3s;}
+.toggle input:checked + .toggle-slider{background:var(--accent);}
+.toggle input:checked + .toggle-slider::before{transform:translateX(20px);background:var(--bg);}
+.task-counter{display:flex;align-items:center;gap:1rem;}
+.task-btn{background:var(--border);border:none;color:var(--text);width:32px;height:32px;border-radius:2px;font-size:1.2rem;cursor:pointer;transition:background 0.2s;display:flex;align-items:center;justify-content:center;}
+.task-btn:hover{background:var(--accent);color:var(--bg);}
+.task-num{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent);min-width:2rem;text-align:center;}
+.btn{background:var(--accent);color:var(--bg);border:none;padding:0.65rem 1.5rem;border-radius:2px;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:0.1em;cursor:pointer;transition:opacity 0.2s;width:100%;margin-top:0.5rem;}
+.btn:hover{opacity:0.85;}.btn:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-outline{background:transparent;border:1px solid var(--accent);color:var(--accent);}
+.btn-outline:hover{background:var(--accent);color:var(--bg);}
+.progress-wrap{background:var(--border);border-radius:2px;height:6px;margin:0.5rem 0;}
+.progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width 0.4s;}
+.api-key-input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:0.5rem 0.75rem;border-radius:2px;font-family:'DM Mono',monospace;font-size:0.8rem;outline:none;transition:border-color 0.2s;}
+.api-key-input:focus{border-color:var(--accent);}
+.log-item{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:0.75rem 1rem;margin-bottom:0.5rem;}
+.log-date{font-size:0.65rem;color:var(--muted);letter-spacing:0.15em;margin-bottom:0.25rem;}
+.log-data{font-size:0.8rem;line-height:1.6;}
+.proj-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1rem;margin-bottom:0.75rem;}
+.proj-name{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:var(--text);letter-spacing:0.05em;margin-bottom:0.5rem;}
+.proj-meta{font-size:0.7rem;color:var(--muted);margin-bottom:0.75rem;}
+.proj-actions{display:flex;gap:0.5rem;margin-top:0.75rem;align-items:center;}
+.proj-actions input[type="range"]{flex:1;}
+.proj-actions input[type="text"]{flex:1;}
+.proj-actions .btn{width:auto;padding:0.5rem 1rem;margin-top:0;}
+.ia-response{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1rem;margin-top:0.75rem;font-size:0.8rem;line-height:1.8;white-space:pre-wrap;display:none;min-height:80px;}
+.ia-response.show{display:block;}
+.ia-status{font-size:0.7rem;color:var(--muted);margin-top:0.5rem;}
+nav{position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,10,0.97);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;height:60px;z-index:100;}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:color 0.2s;font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;}
+.nav-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.5;}
+.nav-btn.active,.nav-btn:hover{color:var(--accent);}
+.status-msg{font-size:0.7rem;color:var(--muted);margin-top:0.5rem;}
+.status-msg.ok{color:var(--accent);}.status-msg.err{color:#ff4444;}
+</style>
+</head>
+<body>
+<div id="splash">
+  <div class="splash-title">STARKOS</div>
+  <div class="splash-sub">Hybrid Athlete &middot; Digital Builder</div>
+  <div class="splash-bar"></div>
+</div>
+<header>
+  <div class="logo">STARKOS</div>
+  <div class="clock" id="clock">--:--:--</div>
+</header>
+<main>
+  <section class="section active" id="sec-hoy">
+    <div class="section-title">HOY</div>
+    <div class="card">
+      <label>Horas de Sueno</label>
+      <input type="number" id="sueno" min="0" max="24" step="0.5" value="7" placeholder="7.5">
+    </div>
+    <div class="card">
+      <label>Energia <span class="range-val" id="energia-val">7</span></label>
+      <input type="range" id="energia" min="1" max="10" value="7" oninput="document.getElementById('energia-val').textContent=this.value">
+    </div>
+    <div class="card">
+      <label>Entrenamiento</label>
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="train-toggle" onchange="toggleSelect()">
+          <span class="toggle-slider"></span>
+        </label>
+        <span id="train-label" style="font-size:0.8rem;color:var(--muted)">Sin entrenamiento</span>
+      </div>
+      <div id="train-select-wrap" style="margin-top:0.75rem;display:none">
+        <select id="train-tipo">
+          <option value="">Seleccionar tipo...</option>
+          <option value="fuerza">Fuerza</option>
+          <option value="cardio">Cardio</option>
+          <option value="hiit">HIIT</option>
+          <option value="movilidad">Movilidad</option>
+          <option value="natacion">Natacion</option>
+          <option value="deporte">Deporte</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="card">
+      <label>Nutricion <span class="range-val" id="nutri-val">7</span></label>
+      <input type="range" id="nutricion" min="1" max="10" value="7" oninput="document.getElementById('nutri-val').textContent=this.value">
+    </div>
+    <div class="card">
+      <label>Tareas Completadas</label>
+      <div class="task-counter">
+        <button class="task-btn" onclick="adjustTask(-1)">-</button>
+        <div class="task-num" id="task-count">0</div>
+        <button class="task-btn" onclick="adjustTask(1)">+</button>
+      </div>
+    </div>
+    <div class="card">
+      <label>Notas del Dia</label>
+      <textarea id="notas" rows="3" placeholder="Reflexiones, logros, pendientes..."></textarea>
+    </div>
+    <div id="save-status" class="status-msg"></div>
+    <button class="btn" onclick="guardarDia()">GUARDAR DIA</button>
+  </section>
+  <section class="section" id="sec-proyectos">
+    <div class="section-title">PROYECTOS</div>
+    <div id="proyectos-list"><div class="status-msg">Cargando proyectos...</div></div>
+    <button class="btn btn-outline" style="margin-top:1rem" onclick="cargarProyectos()">ACTUALIZAR TODO</button>
+  </section>
+  <section class="section" id="sec-ia">
+    <div class="section-title">IA COACH</div>
+    <div class="card">
+      <label>API Key Anthropic</label>
+      <input type="password" class="api-key-input" id="api-key" placeholder="sk-ant-...">
+    </div>
+    <div class="card">
+      <label>Acciones</label>
+      <button class="btn" onclick="resumenIA('diario')" style="margin-bottom:0.5rem">RESUMEN DIARIO</button>
+      <button class="btn btn-outline" onclick="resumenIA('semanal')">RESUMEN SEMANAL</button>
+      <div class="ia-status" id="ia-status"></div>
+    </div>
+    <div class="ia-response" id="ia-response"></div>
+  </section>
+  <section class="section" id="sec-log">
+    <div class="section-title">LOG</div>
+    <div id="log-list"><div class="status-msg">Cargando registros...</div></div>
+    <button class="btn btn-outline" style="margin-top:1rem" onclick="cargarLog()">RECARGAR LOG</button>
+  </section>
+</main>
+<nav>
+  <button class="nav-btn active" onclick="switchTab(this,'hoy')">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+    HOY
+  </button>
+  <button class="nav-btn" onclick="switchTab(this,'proyectos')">
+    <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    PROYECTOS
+  </button>
+  <button class="nav-btn" onclick="switchTab(this,'ia')">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+    IA
+  </button>
+  <button class="nav-btn" onclick="switchTab(this,'log')">
+    <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+    LOG
+  </button>
+</nav>
+<script>
+const API='http://159.223.15.78:3000';
+let taskCount=0;
+window.addEventListener('load',()=>{
+  setTimeout(()=>{const s=document.getElementById('splash');s.classList.add('hide');setTimeout(()=>s.remove(),900);},2000);
+  startClock();cargarLog();cargarProyectos();
+});
+function startClock(){
+  const el=document.getElementById('clock');
+  const tick=()=>{el.textContent=new Date().toLocaleTimeString('es-ES',{hour12:false});};
+  tick();setInterval(tick,1000);
+}
+function switchTab(btn,sec){
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('sec-'+sec).classList.add('active');
+  if(sec==='log')cargarLog();
+  if(sec==='proyectos')cargarProyectos();
+}
+function toggleSelect(){
+  const on=document.getElementById('train-toggle').checked;
+  document.getElementById('train-label').textContent=on?'Entreno hoy':'Sin entrenamiento';
+  document.getElementById('train-select-wrap').style.display=on?'block':'none';
+}
+function adjustTask(d){taskCount=Math.max(0,taskCount+d);document.getElementById('task-count').textContent=taskCount;}
+async function guardarDia(){
+  const st=document.getElementById('save-status');
+  st.textContent='Guardando...';st.className='status-msg';
+  const data={
+    fecha:new Date().toISOString().split('T')[0],
+    sueno:parseFloat(document.getElementById('sueno').value)||0,
+    energia:parseInt(document.getElementById('energia').value),
+    entrenamiento:document.getElementById('train-toggle').checked,
+    tipo_entrenamiento:document.getElementById('train-tipo').value,
+    nutricion:parseInt(document.getElementById('nutricion').value),
+    tareas:taskCount,
+    notas:document.getElementById('notas').value.trim(),
+    timestamp:new Date().toISOString()
+  };
+  try{
+    const r=await fetch(API+'/logs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(!r.ok)throw new Error('Error '+r.status);
+    st.textContent='Dia guardado correctamente';st.className='status-msg ok';
+  }catch(e){st.textContent='Error: '+e.message;st.className='status-msg err';}
+}
+async function cargarProyectos(){
+  const c=document.getElementById('proyectos-list');
+  c.innerHTML='<div class="status-msg">Cargando...</div>';
+  try{
+    const r=await fetch(API+'/proyectos');
+    if(!r.ok)throw new Error('Error '+r.status);
+    const d=await r.json();
+    const ps=Array.isArray(d)?d:(d.proyectos||d.data||[]);
+    if(!ps.length){c.innerHTML='<div class="status-msg">Sin proyectos</div>';return;}
+    c.innerHTML='';
+    ps.forEach(p=>{
+      const pct=p.progreso||p.progress||p.porcentaje||0;
+      const id=String(p.id||p._id||'x');
+      const div=document.createElement('div');
+      div.className='proj-card';
+      div.innerHTML='<div class="proj-name">'+(p.nombre||p.name||'Proyecto')+'</div>'
+        +'<div class="proj-meta">'+(p.descripcion||p.description||'')+'</div>'
+        +'<div class="progress-wrap"><div class="progress-fill" id="fill-'+id+'" style="width:'+pct+'%"></div></div>'
+        +'<div style="font-size:0.7rem;color:var(--muted);margin-top:4px">'+pct+'% completado</div>'
+        +'<div class="proj-actions">'
+        +'<input type="range" min="0" max="100" value="'+pct+'" id="slider-'+id+'" '
+        +'oninput="document.getElementById('pct-'+id+'').textContent=this.value+'%';document.getElementById('fill-'+id+'').style.width=this.value+'%'">'
+        +'<span id="pct-'+id+'" style="font-size:0.8rem;color:var(--accent);min-width:40px">'+pct+'%</span>'
+        +'</div>'
+        +'<div class="proj-actions">'
+        +'<input type="text" id="accion-'+id+'" placeholder="Nueva accion...">'
+        +'<button class="btn" onclick="actualizarProyecto(''+id+'')">ACTUALIZAR</button>'
+        +'</div>';
+      c.appendChild(div);
+    });
+  }catch(e){c.innerHTML='<div class="status-msg err">Error: '+e.message+'</div>';}
+}
+async function actualizarProyecto(id){
+  const pct=document.getElementById('slider-'+id)?.value||0;
+  const accion=document.getElementById('accion-'+id)?.value||'';
+  try{
+    const r=await fetch(API+'/proyectos/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({progreso:parseInt(pct),ultima_accion:accion,timestamp:new Date().toISOString()})});
+    if(!r.ok)throw new Error('Error '+r.status);
+    cargarProyectos();
+  }catch(e){alert('Error: '+e.message);}
+}
+async function resumenIA(tipo){
+  const key=document.getElementById('api-key').value.trim();
+  if(!key){alert('Ingresa tu API Key de Anthropic');return;}
+  const st=document.getElementById('ia-status');
+  const re=document.getElementById('ia-response');
+  st.textContent='Consultando IA...';re.classList.remove('show');re.textContent='';
+  let ctx='Sin datos';
+  try{
+    const logs=await fetch(API+'/logs').then(r=>r.json());
+    const arr=Array.isArray(logs)?logs:(logs.logs||logs.data||[]);
+    ctx=JSON.stringify(arr.slice(-7),null,2);
+  }catch(e){}
+  const prompt=tipo==='diario'
+    ?'Eres un coach de rendimiento personal. Analiza este registro del dia de un atleta-builder y da feedback breve y motivador sobre sueno, energia, entrenamiento, nutricion y productividad. Datos:
+'+ctx
+    :'Eres un coach de rendimiento personal. Analiza los ultimos 7 dias de un atleta-builder y da un resumen semanal con patrones, logros y mejoras. Datos:
+'+ctx;
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,messages:[{role:'user',content:prompt}]})
+    });
+    if(!r.ok){const err=await r.json();throw new Error(err.error?.message||'Error '+r.status);}
+    const data=await r.json();
+    re.textContent=data.content?.[0]?.text||'Sin respuesta';
+    re.classList.add('show');st.textContent='Respuesta recibida';
+  }catch(e){
+    st.textContent='Error: '+e.message;
+    re.textContent='Error al contactar la API: '+e.message;
+    re.classList.add('show');
+  }
+}
+async function cargarLog(){
+  const c=document.getElementById('log-list');
+  c.innerHTML='<div class="status-msg">Cargando...</div>';
+  try{
+    const r=await fetch(API+'/logs');
+    if(!r.ok)throw new Error('Error '+r.status);
+    const d=await r.json();
+    const logs=Array.isArray(d)?d:(d.logs||d.data||[]);
+    if(!logs.length){c.innerHTML='<div class="status-msg">Sin registros aun</div>';return;}
+    c.innerHTML='';
+    [...logs].reverse().forEach(log=>{
+      const div=document.createElement('div');div.className='log-item';
+      const fecha=log.fecha||log.timestamp?.split('T')[0]||'--';
+      div.innerHTML='<div class="log-date">'+fecha+'</div>'
+        +'<div class="log-data">'
+        +'Sueno: <strong>'+(log.sueno||'--')+'h</strong> &nbsp;'
+        +'Energia: <strong>'+(log.energia||'--')+'/10</strong> &nbsp;'
+        +'Entreno: <strong>'+(log.entrenamiento?(log.tipo_entrenamiento||'Si'):'No')+'</strong><br>'
+        +'Nutricion: <strong>'+(log.nutricion||'--')+'/10</strong> &nbsp;'
+        +'Tareas: <strong>'+(log.tareas||0)+'</strong>'
+        +(log.notas?'<br><em style="color:var(--muted)">'+log.notas+'</em>':'')
+        +'</div>';
+      c.appendChild(div);
+    });
+  }catch(e){c.innerHTML='<div class="status-msg err">Error: '+e.message+'</div>';}
+}
+if('serviceWorker'in navigator){
+  window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});
+}
+</script>
+</body>
+</html>
