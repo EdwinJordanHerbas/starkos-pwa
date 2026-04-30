@@ -5,20 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0a">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="StarkOS">
+<meta name="apple-mobile-web-app-title" content="OkiroSport">
 <link rel="manifest" href="manifest.json">
-<title>StarkOS</title>
+<title>OkiroSport</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0a0a0a;--surface:#111;--border:#1e1e1e;--accent:#c8f135;--accent2:#3df0c2;--accent3:#f0623d;--text:#f0f0f0;--muted:#555;--fd:'Bebas Neue',sans-serif;--fm:'DM Mono',monospace}
+:root{--bg:#0a0a0a;--surface:#111;--border:#1e1e1e;--accent:#c8f135;--accent2:#3df0c2;--accent3:#f0623d;--accent4:#a78bfa;--text:#f0f0f0;--muted:#555;--fd:'Bebas Neue',sans-serif;--fm:'DM Mono',monospace}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--fm)}
+/* splash */
 #splash{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;transition:opacity .6s}
 #splash h1{font-family:var(--fd);font-size:4rem;letter-spacing:6px;color:var(--accent)}
 #splash p{font-size:.65rem;color:var(--muted);letter-spacing:3px;margin-top:6px}
 .sbar{width:120px;height:2px;background:var(--border);margin-top:2rem;overflow:hidden}
 .sfill{height:100%;background:var(--accent);animation:ld 1.4s ease forwards}
 @keyframes ld{from{width:0}to{width:100%}}
+/* layout */
 #app{display:flex;flex-direction:column;height:100dvh}
 #hdr{padding:14px 20px 10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-end;flex-shrink:0}
 #hdr h1{font-family:var(--fd);font-size:1.7rem;letter-spacing:3px;color:var(--accent);line-height:1}
@@ -27,11 +29,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 #cnt{flex:1;overflow-y:auto}
 #cnt::-webkit-scrollbar{display:none}
 #nav{display:flex;border-top:1px solid var(--border);flex-shrink:0;padding-bottom:env(safe-area-inset-bottom)}
-.nb{flex:1;padding:11px 4px 9px;background:none;border:none;color:var(--muted);font-family:var(--fm);font-size:.5rem;letter-spacing:1px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;text-transform:uppercase}
+.nb{flex:1;padding:10px 2px 8px;background:none;border:none;color:var(--muted);font-family:var(--fm);font-size:.42rem;letter-spacing:.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;text-transform:uppercase}
 .nb.active{color:var(--accent)}
-.ni{font-size:1rem}
+.ni{font-size:.95rem}
 .sec{display:none;padding:16px}
 .sec.active{display:block}
+/* common components */
 .stl{font-family:var(--fd);font-size:1.3rem;letter-spacing:3px;margin-bottom:14px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px}
 .ct{font-size:.55rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}
@@ -54,6 +57,7 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-r
 textarea:focus{border-color:var(--accent)}
 .bs{width:100%;padding:13px;background:var(--accent);color:#000;border:none;border-radius:9px;font-family:var(--fd);font-size:1rem;letter-spacing:3px;cursor:pointer;margin-top:10px}
 .bs.ok{background:var(--accent2)}
+.bs:disabled{opacity:.5}
 .pc{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px}
 .ph{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
 .pn{font-family:var(--fd);font-size:1.2rem;letter-spacing:2px}
@@ -78,13 +82,64 @@ textarea:focus{border-color:var(--accent)}
 .sd{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px}
 .sd.ok{background:var(--accent)}.sd.er{background:var(--accent3)}
 select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--fm);font-size:.72rem;padding:9px;outline:none}
+/* ── GYM ── */
+.rc{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:border-color .2s}
+.rc:active{border-color:var(--accent)}
+.rn{font-family:var(--fd);font-size:1.3rem;letter-spacing:2px;margin-bottom:4px}
+.rd{font-size:.55rem;color:var(--muted);letter-spacing:1.5px}
+.rb{width:100%;padding:11px;background:var(--accent);color:#000;border:none;border-radius:7px;font-family:var(--fd);font-size:.9rem;letter-spacing:2px;cursor:pointer;margin-top:10px}
+.rb.danger{background:none;border:1px solid var(--accent3);color:var(--accent3)}
+.ec{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px}
+.en{font-family:var(--fd);font-size:1.1rem;letter-spacing:2px;margin-bottom:4px}
+.er2{font-size:.55rem;color:var(--muted);letter-spacing:1px;margin-bottom:10px}
+.sets-list{display:flex;flex-direction:column;gap:5px;margin-bottom:8px}
+.set-row{display:flex;align-items:center;gap:8px;font-size:.65rem}
+.set-num{color:var(--muted);min-width:14px}
+.set-val{color:var(--accent);font-family:var(--fd);font-size:.95rem}
+.set-chk{color:var(--accent2);margin-left:auto}
+.add-set-form{display:flex;gap:6px;margin-top:8px;align-items:center}
+.add-set-form input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--fm);font-size:.7rem;padding:7px;outline:none;text-align:center}
+.add-set-form input:focus{border-color:var(--accent)}
+.add-set-form .lbl{font-size:.5rem;color:var(--muted);text-align:center}
+.add-set-btn{padding:7px 10px;background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-size:.9rem;cursor:pointer;white-space:nowrap}
+.add-set-btn.open{border-color:var(--accent);color:var(--accent)}
+.save-set-btn{padding:7px 14px;background:var(--accent);color:#000;border:none;border-radius:5px;font-family:var(--fd);font-size:.8rem;cursor:pointer}
+.gym-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.gym-hdr-name{font-family:var(--fd);font-size:1.1rem;letter-spacing:2px;color:var(--accent)}
+.gym-done-card{text-align:center;padding:30px;background:var(--surface);border:1px solid var(--accent2);border-radius:10px;margin-bottom:10px}
+.gym-done-card .icon{font-size:2.5rem;margin-bottom:10px}
+.gym-done-card .title{font-family:var(--fd);font-size:1.5rem;letter-spacing:3px;color:var(--accent2)}
+.gym-done-card .sub{font-size:.6rem;color:var(--muted);letter-spacing:2px;margin-top:6px}
+/* ── NUTRI ── */
+.macro-bar-wrap{margin-bottom:14px}
+.macro-label{display:flex;justify-content:space-between;font-size:.55rem;color:var(--muted);margin-bottom:4px}
+.macro-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px}
+.macro-fill{height:100%;border-radius:3px;transition:width .4s}
+.kcal-big{font-family:var(--fd);font-size:2.5rem;color:var(--accent);line-height:1}
+.kcal-label{font-size:.5rem;color:var(--muted);letter-spacing:2px}
+.meal-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:7px}
+.meal-name{font-size:.75rem;margin-bottom:5px}
+.meal-macros{display:flex;gap:10px;font-size:.58rem;color:var(--muted)}
+.meal-macros span{color:var(--text)}
+.add-meal-form{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;display:none}
+.add-meal-form.open{display:block}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.form-field{display:flex;flex-direction:column;gap:4px}
+.form-field label{font-size:.5rem;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}
+.form-field input{background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--fm);font-size:.7rem;padding:7px;outline:none}
+.form-field input:focus{border-color:var(--accent2)}
+.photo-btn{width:100%;padding:12px;background:none;border:1px solid var(--accent4);border-radius:9px;color:var(--accent4);font-family:var(--fd);font-size:.9rem;letter-spacing:2px;cursor:pointer;margin-bottom:9px;display:flex;align-items:center;justify-content:center;gap:8px}
+.photo-btn:disabled{opacity:.4}
+input[type=file]{display:none}
 </style>
 </head>
 <body>
-<div id="splash"><h1>STARKOS</h1><p>HYBRID ATHLETE · DIGITAL BUILDER</p><div class="sbar"><div class="sfill"></div></div></div>
+<div id="splash"><h1>OKIROSPORT</h1><p>HYBRID ATHLETE · DIGITAL BUILDER</p><div class="sbar"><div class="sfill"></div></div></div>
 <div id="app">
- <div id="hdr"><div><h1>STARKOS</h1><p id="fh">HOY</p></div><div id="clk">00:00</div></div>
+ <div id="hdr"><div><h1>OKIROSPORT</h1><p id="fh">HOY</p></div><div id="clk">00:00</div></div>
  <div id="cnt">
+
+  <!-- ── HOY ─────────────────────────────────────────── -->
   <div class="sec active" id="sec-hoy">
    <div class="stl">HOY</div>
    <div class="mg">
@@ -109,7 +164,66 @@ select{width:100%;background:var(--bg);border:1px solid var(--border);border-rad
    <div class="card"><div class="ct">Notas</div><textarea id="in2" placeholder="¿Cómo fue el día?"></textarea></div>
    <button class="bs" id="bsv" onclick="saveLog()">GUARDAR DÍA</button>
   </div>
-  <div class="sec" id="sec-proyectos"><div class="stl">PROYECTOS</div><div id="pl"><div style="text-align:center;padding:40px;color:var(--muted);font-size:.7rem">Cargando...</div></div></div>
+
+  <!-- ── GYM ─────────────────────────────────────────── -->
+  <div class="sec" id="sec-gym">
+   <div class="stl">GYM</div>
+   <div id="gym-content"><div style="text-align:center;padding:40px;color:var(--muted);font-size:.7rem">Cargando...</div></div>
+  </div>
+
+  <!-- ── NUTRI ────────────────────────────────────────── -->
+  <div class="sec" id="sec-nutri">
+   <div class="stl">NUTRICIÓN</div>
+   <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px">
+     <div><div class="kcal-big" id="n-kcal">0</div><div class="kcal-label">KCAL HOY</div></div>
+     <div style="text-align:right;font-size:.6rem;color:var(--muted)">
+      P: <span id="n-prot" style="color:var(--accent2)">0</span>g &nbsp;
+      C: <span id="n-carb" style="color:var(--accent)">0</span>g &nbsp;
+      G: <span id="n-fat" style="color:var(--accent3)">0</span>g
+     </div>
+    </div>
+    <div class="macro-bar-wrap">
+     <div class="macro-label"><span>PROTEÍNAS</span><span id="n-prot2">0g / 180g</span></div>
+     <div class="macro-bar"><div class="macro-fill" id="bar-prot" style="width:0%;background:var(--accent2)"></div></div>
+     <div class="macro-label"><span>CARBOS</span><span id="n-carb2">0g / 300g</span></div>
+     <div class="macro-bar"><div class="macro-fill" id="bar-carb" style="width:0%;background:var(--accent)"></div></div>
+     <div class="macro-label"><span>GRASAS</span><span id="n-fat2">0g / 70g</span></div>
+     <div class="macro-bar"><div class="macro-fill" id="bar-fat" style="width:0%;background:var(--accent3)"></div></div>
+    </div>
+   </div>
+   <input type="file" id="foto-input" accept="image/*" capture="environment" onchange="analizarFoto(this)">
+   <button class="photo-btn" id="btn-foto" onclick="document.getElementById('foto-input').click()">
+    <span>◑</span> ANALIZAR FOTO IA
+   </button>
+   <div class="add-meal-form" id="add-meal-form">
+    <div class="ct">NUEVA COMIDA</div>
+    <div class="form-field" style="margin-bottom:8px">
+     <label>Nombre</label>
+     <input id="m-nombre" placeholder="Pollo con arroz..." style="width:100%">
+    </div>
+    <div class="form-row">
+     <div class="form-field"><label>Kcal</label><input id="m-kcal" type="number" min="0" placeholder="0"></div>
+     <div class="form-field"><label>Proteínas (g)</label><input id="m-prot" type="number" min="0" placeholder="0"></div>
+    </div>
+    <div class="form-row">
+     <div class="form-field"><label>Carbos (g)</label><input id="m-carb" type="number" min="0" placeholder="0"></div>
+     <div class="form-field"><label>Grasas (g)</label><input id="m-fat" type="number" min="0" placeholder="0"></div>
+    </div>
+    <button class="bs" onclick="guardarComida()" style="margin-top:6px">GUARDAR COMIDA</button>
+    <button onclick="document.getElementById('add-meal-form').classList.remove('open')" style="width:100%;padding:10px;background:none;border:none;color:var(--muted);font-family:var(--fm);font-size:.6rem;cursor:pointer;margin-top:4px">CANCELAR</button>
+   </div>
+   <button onclick="document.getElementById('add-meal-form').classList.toggle('open')" style="width:100%;padding:11px;background:none;border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:var(--fd);font-size:.9rem;letter-spacing:2px;cursor:pointer;margin-bottom:10px">+ AÑADIR MANUAL</button>
+   <div id="meals-list"></div>
+  </div>
+
+  <!-- ── PROYECTOS ─────────────────────────────────────── -->
+  <div class="sec" id="sec-proyectos">
+   <div class="stl">PROYECTOS</div>
+   <div id="pl"><div style="text-align:center;padding:40px;color:var(--muted);font-size:.7rem">Cargando...</div></div>
+  </div>
+
+  <!-- ── IA ────────────────────────────────────────────── -->
   <div class="sec" id="sec-ia">
    <div class="stl">ANÁLISIS IA</div>
    <div class="card" style="margin-bottom:10px"><div class="ct">API Key Anthropic</div>
@@ -121,32 +235,408 @@ select{width:100%;background:var(--bg);border:1px solid var(--border);border-rad
    <button class="bia" id="bs2" onclick="genIA('weekly')" style="border-color:var(--accent);color:var(--accent)">RESUMEN SEMANAL</button>
    <div class="ib" id="io"><div class="ip">Aquí aparecerá tu análisis personalizado de entrenamiento, sueño, nutrición y proyectos.</div></div>
   </div>
-  <div class="sec" id="sec-log"><div class="stl">HISTORIAL</div><div id="hl"><div style="text-align:center;padding:40px;color:var(--muted);font-size:.7rem">Cargando...</div></div></div>
- </div>
+
+  <!-- ── LOG ───────────────────────────────────────────── -->
+  <div class="sec" id="sec-log">
+   <div class="stl">HISTORIAL</div>
+   <div id="hl"><div style="text-align:center;padding:40px;color:var(--muted);font-size:.7rem">Cargando...</div></div>
+  </div>
+
+ </div><!-- /cnt -->
  <nav id="nav">
   <button class="nb active" onclick="ss('hoy',this)"><span class="ni">◎</span>HOY</button>
-  <button class="nb" onclick="ss('proyectos',this)"><span class="ni">◈</span>PROYECTOS</button>
+  <button class="nb" onclick="ss('gym',this)"><span class="ni">▣</span>GYM</button>
+  <button class="nb" onclick="ss('nutri',this)"><span class="ni">◑</span>NUTRI</button>
+  <button class="nb" onclick="ss('proyectos',this)"><span class="ni">◈</span>PROJ</button>
   <button class="nb" onclick="ss('ia',this)"><span class="ni">◇</span>IA</button>
   <button class="nb" onclick="ss('log',this)"><span class="ni">◉</span>LOG</button>
  </nav>
 </div>
+
 <script>
-const A='http://159.223.15.78:3000';
-let td=0;
-function updateClock(){const n=new Date();document.getElementById('clk').textContent=n.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});document.getElementById('fh').textContent=n.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'short'}).toUpperCase();}
-updateClock();setInterval(updateClock,1000);
-setTimeout(()=>{const s=document.getElementById('splash');s.style.opacity='0';setTimeout(()=>s.remove(),600);},1600);
-document.getElementById('ie').oninput=e=>document.getElementById('ev').textContent=e.target.value;
-document.getElementById('in').oninput=e=>document.getElementById('nv').textContent=e.target.value;
-function ct(d){td=Math.max(0,Math.min(5,td+d));document.getElementById('td').textContent=td;}
-function ss(n,b){document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));document.querySelectorAll('.nb').forEach(x=>x.classList.remove('active'));document.getElementById('sec-'+n).classList.add('active');b.classList.add('active');if(n==='proyectos')loadP();if(n==='log')loadL();}
-async function saveLog(){const b=document.getElementById('bsv');b.textContent='GUARDANDO...';b.disabled=true;const data={fecha:new Date().toISOString().split('T')[0],sueno:parseFloat(document.getElementById('is').value)||7,energia:parseInt(document.getElementById('ie').value),entreno_completado:document.getElementById('iet').checked,tipo_entreno:document.getElementById('itt').value,nutricion:parseInt(document.getElementById('in').value),tareas_completadas:td,tareas_total:5,notas:document.getElementById('in2').value};try{await fetch(A+'/logs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});b.textContent='GUARDADO ✓';b.classList.add('ok');setTimeout(()=>{b.textContent='GUARDAR DÍA';b.classList.remove('ok');b.disabled=false;},2000);}catch(e){b.textContent='ERROR';b.disabled=false;}}
-async function loadP(){try{const r=await fetch(A+'/proyectos');const d=await r.json();const c=['var(--accent)','var(--accent2)','var(--accent3)'];document.getElementById('pl').innerHTML=d.map((p,i)=>'<div class="pc"><div class="ph"><div class="pn">'+p.nombre.toUpperCase()+'</div><div class="pp" id="pp'+p.id+'">'+p.progreso+'%</div></div><div class="pt"><div class="pf" id="pf'+p.id+'" style="width:'+p.progreso+'%;background:'+c[i%3]+'"></div></div><div class="po">'+p.objetivo+'</div><input class="pi" id="pa'+p.id+'" placeholder="Última acción..." value="'+(p.ultima_accion||'')+'"><input type="range" style="width:100%;accent-color:var(--accent);margin-top:5px" id="ps'+p.id+'" min="0" max="100" value="'+p.progreso+'" oninput="document.getElementById(\'pp'+p.id+'\').textContent=this.value+\'%\';document.getElementById(\'pf'+p.id+'\').style.width=this.value+\'%\'"><button class="bu" onclick="updP('+p.id+')">ACTUALIZAR</button></div>').join('');}catch(e){document.getElementById('pl').innerHTML='<div style="color:var(--accent3);padding:20px">Error cargando proyectos</div>';}}
-async function updP(id){await fetch(A+'/proyectos/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({progreso:parseInt(document.getElementById('ps'+id).value),ultima_accion:document.getElementById('pa'+id).value})});}
-async function loadL(){try{const r=await fetch(A+'/logs');const d=await r.json();if(!d.length){document.getElementById('hl').innerHTML='<div style="color:var(--muted);padding:20px;text-align:center;font-size:.7rem">Sin registros aún.</div>';return;}document.getElementById('hl').innerHTML=d.map(l=>'<div class="li"><div><div style="font-family:var(--fd);font-size:.95rem;letter-spacing:1px">'+new Date(l.fecha).toLocaleDateString('es-ES',{day:'numeric',month:'short'}).toUpperCase()+'</div><div style="font-size:.6rem;color:var(--muted)">'+l.tipo_entreno+'</div></div><div style="display:flex;gap:10px"><span style="font-size:.62rem">💤<b style="color:var(--accent)">'+l.sueno+'h</b></span><span style="font-size:.62rem">⚡<b style="color:var(--accent)">'+l.energia+'</b></span><span style="font-size:.62rem">✓<b style="color:var(--accent)">'+l.tareas_completadas+'/'+l.tareas_total+'</b></span></div></div>').join('');}catch(e){document.getElementById('hl').innerHTML='<div style="color:var(--accent3);padding:20px">Error</div>';}}
-function saveKey(){const k=document.getElementById('ak').value.trim();if(!k.startsWith('sk-ant-')){document.getElementById('aks').innerHTML='<span class="sd er"></span>Formato inválido';return;}localStorage.setItem('ak',k);document.getElementById('aks').innerHTML='<span class="sd ok"></span>Guardada';}
-window.onload=()=>{const k=localStorage.getItem('ak');if(k){document.getElementById('ak').value=k;document.getElementById('aks').innerHTML='<span class="sd ok"></span>Cargada';}loadP();loadL();};
-async function genIA(t){const k=localStorage.getItem('ak');if(!k){document.getElementById('io').innerHTML='<div class="ip" style="color:var(--accent3)">Añade tu API key primero.</div>';return;}const bi=t==='daily'?'bd':'bs2';document.getElementById(bi).disabled=true;document.getElementById('io').innerHTML='<div class="dp" style="padding:8px 0"><span></span><span></span><span></span></div>';try{const lr=await fetch(A+'/logs');const logs=await lr.json();const pr=await fetch(A+'/proyectos');const proyectos=await pr.json();const rl=t==='daily'?logs.slice(0,1):logs.slice(0,7);const prompt='Eres el coach personal de Stark, atleta hibrido y emprendedor digital. Analiza estos datos en espanol y da feedback directo.\n\nDATOS:\n'+JSON.stringify(rl)+'\n\nPROYECTOS:\n'+JSON.stringify(proyectos)+'\n\nResponde:\n1. PUNTUACION (1-10)\n2. LO QUE VA BIEN (max 2)\n3. A MEJORAR (1 cosa)\n4. ACCION MANANA (1 tarea)\n\nMax 150 palabras.';const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:prompt}]})});const data=await res.json();document.getElementById('io').innerHTML='<div class="it">'+(data.content?.[0]?.text||'Sin respuesta')+'</div>';}catch(e){document.getElementById('io').innerHTML='<div class="ip" style="color:var(--accent3)">Error: '+e.message+'</div>';}document.getElementById(bi).disabled=false;}
+const A = '';
+let tdCount = 0;
+
+// ── CLOCK ──────────────────────────────────────────────
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clk').textContent = n.toLocaleTimeString('es-ES', {hour:'2-digit',minute:'2-digit'});
+  document.getElementById('fh').textContent = n.toLocaleDateString('es-ES', {weekday:'long',day:'numeric',month:'short'}).toUpperCase();
+}
+updateClock(); setInterval(updateClock, 1000);
+setTimeout(() => { const s = document.getElementById('splash'); s.style.opacity = '0'; setTimeout(() => s.remove(), 600); }, 1600);
+
+// ── NAVIGATION ─────────────────────────────────────────
+function ss(n, b) {
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(x => x.classList.remove('active'));
+  document.getElementById('sec-' + n).classList.add('active');
+  b.classList.add('active');
+  if (n === 'proyectos') loadP();
+  if (n === 'log') loadL();
+  if (n === 'gym') loadGym();
+  if (n === 'nutri') loadNutri();
+}
+
+// ── HOY ────────────────────────────────────────────────
+document.getElementById('ie').oninput = e => document.getElementById('ev').textContent = e.target.value;
+document.getElementById('in').oninput = e => document.getElementById('nv').textContent = e.target.value;
+function ct(d) { tdCount = Math.max(0, Math.min(5, tdCount + d)); document.getElementById('td').textContent = tdCount; }
+async function saveLog() {
+  const b = document.getElementById('bsv');
+  b.textContent = 'GUARDANDO...'; b.disabled = true;
+  const data = {
+    fecha: new Date().toISOString().split('T')[0],
+    sueno: parseFloat(document.getElementById('is').value) || 7,
+    energia: parseInt(document.getElementById('ie').value),
+    entreno_completado: document.getElementById('iet').checked,
+    tipo_entreno: document.getElementById('itt').value,
+    nutricion: parseInt(document.getElementById('in').value),
+    tareas_completadas: tdCount, tareas_total: 5,
+    notas: document.getElementById('in2').value
+  };
+  try {
+    await fetch(A + '/logs', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    b.textContent = 'GUARDADO ✓'; b.classList.add('ok');
+    setTimeout(() => { b.textContent = 'GUARDAR DÍA'; b.classList.remove('ok'); b.disabled = false; }, 2000);
+  } catch(e) { b.textContent = 'ERROR'; b.disabled = false; }
+}
+
+// ── PROYECTOS ──────────────────────────────────────────
+async function loadP() {
+  try {
+    const r = await fetch(A + '/proyectos'); const d = await r.json();
+    const c = ['var(--accent)','var(--accent2)','var(--accent3)'];
+    document.getElementById('pl').innerHTML = d.map((p, i) =>
+      `<div class="pc"><div class="ph"><div class="pn">${p.nombre.toUpperCase()}</div><div class="pp" id="pp${p.id}">${p.progreso}%</div></div>
+      <div class="pt"><div class="pf" id="pf${p.id}" style="width:${p.progreso}%;background:${c[i%3]}"></div></div>
+      <div class="po">${p.objetivo}</div>
+      <input class="pi" id="pa${p.id}" placeholder="Última acción..." value="${p.ultima_accion||''}">
+      <input type="range" style="width:100%;accent-color:var(--accent);margin-top:5px" id="ps${p.id}" min="0" max="100" value="${p.progreso}"
+        oninput="document.getElementById('pp${p.id}').textContent=this.value+'%';document.getElementById('pf${p.id}').style.width=this.value+'%'">
+      <button class="bu" onclick="updP(${p.id})">ACTUALIZAR</button></div>`
+    ).join('');
+  } catch(e) { document.getElementById('pl').innerHTML = '<div style="color:var(--accent3);padding:20px">Error cargando proyectos</div>'; }
+}
+async function updP(id) {
+  await fetch(A + '/proyectos/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({progreso: parseInt(document.getElementById('ps'+id).value), ultima_accion: document.getElementById('pa'+id).value})});
+}
+
+// ── LOG ────────────────────────────────────────────────
+async function loadL() {
+  try {
+    const r = await fetch(A + '/logs'); const d = await r.json();
+    if (!d.length) { document.getElementById('hl').innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;font-size:.7rem">Sin registros aún.</div>'; return; }
+    document.getElementById('hl').innerHTML = d.map(l =>
+      `<div class="li"><div>
+        <div style="font-family:var(--fd);font-size:.95rem;letter-spacing:1px">${new Date(l.fecha).toLocaleDateString('es-ES',{day:'numeric',month:'short'}).toUpperCase()}</div>
+        <div style="font-size:.6rem;color:var(--muted)">${l.tipo_entreno}</div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <span style="font-size:.62rem">💤<b style="color:var(--accent)">${l.sueno}h</b></span>
+        <span style="font-size:.62rem">⚡<b style="color:var(--accent)">${l.energia}</b></span>
+        <span style="font-size:.62rem">✓<b style="color:var(--accent)">${l.tareas_completadas}/${l.tareas_total}</b></span>
+      </div></div>`
+    ).join('');
+  } catch(e) { document.getElementById('hl').innerHTML = '<div style="color:var(--accent3);padding:20px">Error</div>'; }
+}
+
+// ── IA ─────────────────────────────────────────────────
+function saveKey() {
+  const k = document.getElementById('ak').value.trim();
+  if (!k.startsWith('sk-ant-')) { document.getElementById('aks').innerHTML = '<span class="sd er"></span>Formato inválido'; return; }
+  localStorage.setItem('ak', k);
+  document.getElementById('aks').innerHTML = '<span class="sd ok"></span>Guardada';
+}
+window.onload = () => {
+  const k = localStorage.getItem('ak');
+  if (k) { document.getElementById('ak').value = k; document.getElementById('aks').innerHTML = '<span class="sd ok"></span>Cargada'; }
+  loadP(); loadL();
+};
+async function genIA(t) {
+  const k = localStorage.getItem('ak');
+  if (!k) { document.getElementById('io').innerHTML = '<div class="ip" style="color:var(--accent3)">Añade tu API key primero.</div>'; return; }
+  const bi = t === 'daily' ? 'bd' : 'bs2';
+  document.getElementById(bi).disabled = true;
+  document.getElementById('io').innerHTML = '<div class="dp" style="padding:8px 0"><span></span><span></span><span></span></div>';
+  try {
+    const [logs, proyectos] = await Promise.all([
+      fetch(A+'/logs').then(r=>r.json()),
+      fetch(A+'/proyectos').then(r=>r.json())
+    ]);
+    const rl = t === 'daily' ? logs.slice(0,1) : logs.slice(0,7);
+    const prompt = `Eres el coach personal del Operador, atleta hibrido y emprendedor digital. Analiza estos datos en espanol y da feedback directo.\n\nDATOS:\n${JSON.stringify(rl)}\n\nPROYECTOS:\n${JSON.stringify(proyectos)}\n\nResponde:\n1. PUNTUACION (1-10)\n2. LO QUE VA BIEN (max 2)\n3. A MEJORAR (1 cosa)\n4. ACCION MANANA (1 tarea)\n\nMax 150 palabras.`;
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST', headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body: JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:prompt}]})
+    });
+    const data = await res.json();
+    document.getElementById('io').innerHTML = '<div class="it">' + (data.content?.[0]?.text || 'Sin respuesta') + '</div>';
+  } catch(e) { document.getElementById('io').innerHTML = '<div class="ip" style="color:var(--accent3)">Error: ' + e.message + '</div>'; }
+  document.getElementById(bi).disabled = false;
+}
+
+// ════════════════════════════════════════════════════════
+// GYM MODULE
+// ════════════════════════════════════════════════════════
+let gymRutinas = [], gymSesion = null, gymEj = [], gymSeriesMap = {}, gymOpenForm = null;
+
+async function loadGym() {
+  try {
+    [gymRutinas, gymSesion] = await Promise.all([
+      fetch(A+'/rutinas').then(r=>r.json()),
+      fetch(A+'/sesiones/hoy').then(r=>r.json())
+    ]);
+    gymSeriesMap = {};
+    if (gymSesion?.series) {
+      gymSesion.series.forEach(s => {
+        if (!gymSeriesMap[s.ejercicio_id]) gymSeriesMap[s.ejercicio_id] = [];
+        gymSeriesMap[s.ejercicio_id].push(s);
+      });
+    }
+    if (gymSesion?.rutina_id) {
+      gymEj = await fetch(A+'/rutinas/'+gymSesion.rutina_id+'/ejercicios').then(r=>r.json());
+    }
+  } catch(e) { gymRutinas = []; gymSesion = null; gymEj = []; }
+  renderGym();
+}
+
+function renderGym() {
+  const el = document.getElementById('gym-content');
+  if (!gymSesion) { renderRutinaSelect(el); return; }
+  if (gymSesion.completada) { renderSesionDone(el); return; }
+  renderSesionActiva(el);
+}
+
+function renderRutinaSelect(el) {
+  const dias = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  const hoy = dias[new Date().getDay()];
+  el.innerHTML = '<div style="font-size:.62rem;color:var(--muted);margin-bottom:14px;letter-spacing:1px">ELIGE LA RUTINA DE HOY</div>' +
+    gymRutinas.map(r => {
+      const ds = Array.isArray(r.dias) ? r.dias : (r.dias ? JSON.parse(r.dias) : []);
+      const esHoy = ds.includes(hoy);
+      return `<div class="rc" style="${esHoy ? 'border-color:var(--accent)' : ''}">
+        <div class="rn" style="${esHoy ? 'color:var(--accent)' : ''}">${r.nombre}</div>
+        <div class="rd">${r.descripcion || ''}</div>
+        ${esHoy ? '<div style="font-size:.5rem;color:var(--accent);margin-top:4px;letter-spacing:1px">· TOCA HOY ·</div>' : ''}
+        <button class="rb" onclick="iniciarSesion(${r.id})">INICIAR SESIÓN</button>
+      </div>`;
+    }).join('');
+}
+
+async function iniciarSesion(rutina_id) {
+  try {
+    gymSesion = await fetch(A+'/sesiones', {method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({rutina_id, fecha: new Date().toISOString().split('T')[0]})}).then(r=>r.json());
+    gymEj = await fetch(A+'/rutinas/'+rutina_id+'/ejercicios').then(r=>r.json());
+    gymSeriesMap = {};
+    renderGym();
+  } catch(e) { alert('Error iniciando sesión'); }
+}
+
+function renderSesionActiva(el) {
+  const seriesTotal = Object.values(gymSeriesMap).reduce((a, v) => a + v.length, 0);
+  el.innerHTML = `
+    <div class="gym-hdr">
+      <div class="gym-hdr-name">${gymSesion.rutina_nombre || 'SESIÓN'}</div>
+      <div style="font-size:.55rem;color:var(--muted)">${seriesTotal} series</div>
+    </div>` +
+    gymEj.map(e => renderEjercicioCard(e)).join('') +
+    `<button class="bs" onclick="completarSesion()" style="margin-top:4px">COMPLETAR SESIÓN ✓</button>
+     <button class="rb danger" onclick="cancelarSesion()" style="margin-top:8px">CANCELAR</button>`;
+}
+
+function renderEjercicioCard(e) {
+  const series = gymSeriesMap[e.id] || [];
+  const setsHTML = series.map((s, i) =>
+    `<div class="set-row">
+      <span class="set-num">${i+1}</span>
+      <span class="set-val">${s.peso}kg × ${s.reps}</span>
+      <span class="set-chk">✓</span>
+    </div>`
+  ).join('');
+  const isOpen = gymOpenForm === e.id;
+  const formHTML = isOpen ? `
+    <div class="add-set-form" id="form-${e.id}">
+      <div style="flex:1"><div class="lbl">PESO kg</div><input id="w-${e.id}" type="number" step="0.5" min="0" placeholder="${series.length ? series[series.length-1].peso : '0'}" inputmode="decimal"></div>
+      <div style="flex:1"><div class="lbl">REPS</div><input id="r-${e.id}" type="number" min="0" placeholder="${e.reps_objetivo}" inputmode="numeric"></div>
+      <button class="save-set-btn" onclick="guardarSerie(${e.id})">✓</button>
+    </div>` : '';
+  return `<div class="ec" id="ec-${e.id}">
+    <div class="en">${e.nombre.toUpperCase()}</div>
+    <div class="er2">${e.series} series · ${e.reps_objetivo} reps</div>
+    <div class="sets-list">${setsHTML}</div>
+    ${formHTML}
+    <button class="add-set-btn ${isOpen ? 'open' : ''}" onclick="toggleForm(${e.id})">
+      ${isOpen ? '✕ CERRAR' : '+ SET'}
+    </button>
+  </div>`;
+}
+
+function toggleForm(ejId) {
+  gymOpenForm = gymOpenForm === ejId ? null : ejId;
+  renderGym();
+  if (gymOpenForm) {
+    setTimeout(() => {
+      const inp = document.getElementById('w-' + ejId);
+      if (inp) inp.focus();
+    }, 50);
+  }
+}
+
+async function guardarSerie(ejId) {
+  const peso = parseFloat(document.getElementById('w-'+ejId).value) || 0;
+  const reps = parseInt(document.getElementById('r-'+ejId).value) || 0;
+  if (!reps) return;
+  const serieNum = (gymSeriesMap[ejId]?.length || 0) + 1;
+  try {
+    const s = await fetch(A+'/sesiones/'+gymSesion.id+'/series', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ejercicio_id: ejId, serie_num: serieNum, peso, reps})
+    }).then(r=>r.json());
+    if (!gymSeriesMap[ejId]) gymSeriesMap[ejId] = [];
+    gymSeriesMap[ejId].push(s);
+    gymOpenForm = null;
+    renderGym();
+  } catch(e) { alert('Error guardando serie'); }
+}
+
+async function completarSesion() {
+  if (!confirm('¿Completar la sesión de hoy?')) return;
+  try {
+    await fetch(A+'/sesiones/'+gymSesion.id+'/completar', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+    gymSesion.completada = true;
+    renderGym();
+  } catch(e) { alert('Error completando sesión'); }
+}
+
+async function cancelarSesion() {
+  if (!confirm('¿Cancelar la sesión? Se perderán las series registradas.')) return;
+  gymSesion = null; gymEj = []; gymSeriesMap = {}; gymOpenForm = null;
+  renderGym();
+}
+
+function renderSesionDone(el) {
+  const total = Object.values(gymSeriesMap).reduce((a, v) => a + v.length, 0);
+  el.innerHTML = `
+    <div class="gym-done-card">
+      <div class="icon">✦</div>
+      <div class="title">SESIÓN COMPLETADA</div>
+      <div class="sub">${gymSesion.rutina_nombre || ''} · ${gymEj.length} ejercicios · ${total} series</div>
+    </div>
+    <button class="rb" onclick="gymSesion=null;gymEj=[];gymSeriesMap={};renderGym()" style="margin-top:4px">NUEVA SESIÓN</button>`;
+}
+
+// ════════════════════════════════════════════════════════
+// NUTRICIÓN MODULE
+// ════════════════════════════════════════════════════════
+const MACRO_GOALS = { proteinas: 180, carbos: 300, grasas: 70, calorias: 2400 };
+
+async function loadNutri() {
+  const hoy = new Date().toISOString().split('T')[0];
+  try {
+    const d = await fetch(A+'/nutricion/'+hoy).then(r=>r.json());
+    renderNutriTotals(d.totals);
+    renderMeals(d.comidas);
+  } catch(e) {}
+}
+
+function renderNutriTotals(t) {
+  document.getElementById('n-kcal').textContent = Math.round(t.calorias);
+  document.getElementById('n-prot').textContent = Math.round(t.proteinas);
+  document.getElementById('n-carb').textContent = Math.round(t.carbos);
+  document.getElementById('n-fat').textContent = Math.round(t.grasas);
+  document.getElementById('n-prot2').textContent = `${Math.round(t.proteinas)}g / ${MACRO_GOALS.proteinas}g`;
+  document.getElementById('n-carb2').textContent = `${Math.round(t.carbos)}g / ${MACRO_GOALS.carbos}g`;
+  document.getElementById('n-fat2').textContent = `${Math.round(t.grasas)}g / ${MACRO_GOALS.grasas}g`;
+  document.getElementById('bar-prot').style.width = Math.min(100, (t.proteinas / MACRO_GOALS.proteinas) * 100) + '%';
+  document.getElementById('bar-carb').style.width = Math.min(100, (t.carbos / MACRO_GOALS.carbos) * 100) + '%';
+  document.getElementById('bar-fat').style.width = Math.min(100, (t.grasas / MACRO_GOALS.grasas) * 100) + '%';
+}
+
+function renderMeals(comidas) {
+  const el = document.getElementById('meals-list');
+  if (!comidas.length) { el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:.7rem">Sin comidas registradas hoy</div>'; return; }
+  el.innerHTML = comidas.map(c =>
+    `<div class="meal-card">
+      <div class="meal-name">${c.nombre}</div>
+      <div class="meal-macros">
+        <span>🔥 <span>${c.calorias}</span> kcal</span>
+        <span>P: <span style="color:var(--accent2)">${Math.round(c.proteinas)}g</span></span>
+        <span>C: <span style="color:var(--accent)">${Math.round(c.carbos)}g</span></span>
+        <span>G: <span style="color:var(--accent3)">${Math.round(c.grasas)}g</span></span>
+      </div>
+    </div>`
+  ).join('');
+}
+
+async function guardarComida() {
+  const nombre = document.getElementById('m-nombre').value.trim();
+  if (!nombre) return;
+  const data = {
+    nombre,
+    calorias: parseInt(document.getElementById('m-kcal').value) || 0,
+    proteinas: parseFloat(document.getElementById('m-prot').value) || 0,
+    carbos: parseFloat(document.getElementById('m-carb').value) || 0,
+    grasas: parseFloat(document.getElementById('m-fat').value) || 0
+  };
+  try {
+    await fetch(A+'/nutricion', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    document.getElementById('add-meal-form').classList.remove('open');
+    ['m-nombre','m-kcal','m-prot','m-carb','m-fat'].forEach(id => document.getElementById(id).value = '');
+    loadNutri();
+  } catch(e) { alert('Error guardando comida'); }
+}
+
+async function analizarFoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const btn = document.getElementById('btn-foto');
+  btn.disabled = true; btn.innerHTML = '<span>◑</span> ANALIZANDO...';
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const base64 = e.target.result.split(',')[1];
+    const media_type = file.type || 'image/jpeg';
+    try {
+      let result;
+      const apiKey = localStorage.getItem('ak');
+      if (apiKey) {
+        // Llamada directa desde el browser con la API key guardada
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+          body: JSON.stringify({
+            model:'claude-sonnet-4-20250514', max_tokens:300,
+            messages:[{role:'user',content:[
+              {type:'image',source:{type:'base64',media_type,data:base64}},
+              {type:'text',text:'Analiza esta comida. Devuelve ÚNICAMENTE un JSON sin markdown:\n{"nombre":"nombre","calorias":0,"proteinas":0,"carbos":0,"grasas":0}'}
+            ]}]
+          })
+        });
+        const d = await res.json();
+        result = JSON.parse(d.content?.[0]?.text || '{}');
+      } else {
+        // Fallback al backend (requiere ANTHROPIC_API_KEY en el servidor)
+        result = await fetch(A+'/nutricion/analizar-foto', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({imagen_base64: base64, media_type})
+        }).then(r=>r.json());
+      }
+      if (result.nombre) {
+        document.getElementById('add-meal-form').classList.add('open');
+        document.getElementById('m-nombre').value = result.nombre;
+        document.getElementById('m-kcal').value = result.calorias || '';
+        document.getElementById('m-prot').value = result.proteinas || '';
+        document.getElementById('m-carb').value = result.carbos || '';
+        document.getElementById('m-fat').value = result.grasas || '';
+      }
+    } catch(err) { alert('Error al analizar la foto: ' + err.message); }
+    btn.disabled = false; btn.innerHTML = '<span>◑</span> ANALIZAR FOTO IA';
+    input.value = '';
+  };
+  reader.readAsDataURL(file);
+}
 </script>
 </body>
 </html>
