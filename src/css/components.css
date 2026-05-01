@@ -1,0 +1,415 @@
+/* OkiroSport — Componentes: Cards, Buttons, Inputs, Badges */
+
+/* ── CARDS ──────────────────────────────────────────────────────── */
+.card {
+  background:    var(--surface-1);
+  box-shadow:    inset 0 0 0 0.5px rgba(255,255,255,0.08);
+  clip-path:     polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  padding:       16px;
+  margin-bottom: 12px;
+  transition:    box-shadow var(--transition);
+  position:      relative;
+}
+
+.card:focus-within {
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.15), 0 0 16px var(--glow);
+}
+
+/* ── BOTONES ────────────────────────────────────────────────────── */
+.bs,
+.bu {
+  width:          100%;
+  height:         48px;
+  font-family:    var(--font-sans);
+  font-weight:    700;
+  font-size:      14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor:         pointer;
+  clip-path:      polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  transition:     all 80ms ease;
+}
+
+.bs {
+  background: linear-gradient(135deg, var(--brand) 0%, #0088cc 100%);
+  border:     none;
+  color:      #000;
+}
+
+.bs:hover {
+  box-shadow: 0 0 20px var(--glow-strong);
+}
+
+.bs:active {
+  transform: scale(0.97);
+}
+
+.bu {
+  background: transparent;
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.12);
+  color:      var(--text-3);
+}
+
+.rb {
+  background: transparent;
+  border:     1px solid #ff3333;
+  color:      #ff3333;
+}
+
+.bia {
+  width:          100%;
+  height:         48px;
+  background:     transparent;
+  border:         none;
+  font-family:    var(--font-sans);
+  font-weight:    600;
+  font-size:      13px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor:         pointer;
+  margin-bottom:  8px;
+}
+
+#bd {
+  box-shadow: inset 0 0 0 0.5px var(--brand);
+  color:      var(--brand);
+  background: rgba(0, 217, 255, 0.05);
+}
+
+#bs2 {
+  box-shadow: inset 0 0 0 0.5px var(--success);
+  color:      var(--success);
+  background: rgba(52, 211, 153, 0.05);
+}
+
+.bia:active {
+  transform: scale(0.97);
+}
+
+/* ── INPUTS Y FORMULARIOS ───────────────────────────────────────── */
+input[type=text],
+input[type=number] {
+  width:         100%;
+  background:    var(--surface-2);
+  box-shadow:    inset 0 0 0 0.5px rgba(255,255,255,0.08);
+  color:         var(--text-2);
+  font-family:   var(--font-sans);
+  font-size:     13px;
+  padding:       10px 12px;
+  outline:       none;
+  border-radius: var(--radius-md);
+  transition:    box-shadow var(--transition);
+}
+
+input:focus {
+  box-shadow: inset 0 0 0 0.5px var(--brand), 0 0 8px var(--glow);
+}
+
+textarea {
+  width:         100%;
+  background:    var(--surface-2);
+  box-shadow:    inset 0 0 0 0.5px rgba(255,255,255,0.08);
+  color:         var(--text-2);
+  font-family:   var(--font-sans);
+  font-size:     13px;
+  padding:       10px 12px;
+  outline:       none;
+  border-radius: var(--radius-md);
+  transition:    box-shadow var(--transition);
+  resize:        none;
+  min-height:    80px;
+  line-height:   1.5;
+}
+
+select {
+  width:               100%;
+  background:          var(--surface-2);
+  box-shadow:          inset 0 0 0 0.5px rgba(255,255,255,0.08);
+  color:               var(--text-2);
+  font-family:         var(--font-sans);
+  font-size:           13px;
+  padding:             10px 32px 10px 12px;
+  outline:             none;
+  border-radius:       var(--radius-md);
+  transition:          box-shadow var(--transition);
+  cursor:              pointer;
+  -webkit-appearance:  none;
+  appearance:          none;
+  background-image:    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235a8ab0'/%3E%3C/svg%3E");
+  background-repeat:   no-repeat;
+  background-position: right 12px center;
+  background-size:     10px 6px;
+}
+
+input[type=range] {
+  width:              100%;
+  height:             4px;
+  -webkit-appearance: none;
+  appearance:         none;
+  background:         var(--surface-2);
+  border-radius:      0;
+  outline:            none;
+  cursor:             pointer;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance:         none;
+  width:              20px;
+  height:             20px;
+  background:         var(--brand);
+  border-radius:      0;
+  cursor:             pointer;
+}
+
+input[type=range]::-moz-range-thumb {
+  width:         20px;
+  height:        20px;
+  background:    var(--brand);
+  border-radius: 0;
+  border:        none;
+  cursor:        pointer;
+}
+
+input[type=checkbox] {
+  -webkit-appearance: none;
+  appearance:         none;
+  width:              20px;
+  height:             20px;
+  box-shadow:         inset 0 0 0 1px rgba(255,255,255,0.15);
+  background:         transparent;
+  cursor:             pointer;
+  position:           relative;
+  flex-shrink:        0;
+  transition:         all var(--transition);
+}
+
+input[type=checkbox]:checked {
+  background:   var(--brand);
+  box-shadow:   inset 0 0 0 1px var(--brand);
+}
+
+input[type=checkbox]:checked::after {
+  content:     '✓';
+  position:    absolute;
+  color:       #000;
+  font-size:   14px;
+  font-weight: 700;
+  top:         50%;
+  left:        50%;
+  transform:   translate(-50%, -50%);
+}
+
+/* ── TOGGLE (overrides checkbox para .tg) ───────────────────────── */
+.tg {
+  position:    relative;
+  width:       38px;
+  height:      21px;
+  flex-shrink: 0;
+}
+
+.tg input[type=checkbox] {
+  opacity:    0;
+  width:      0;
+  height:     0;
+  position:   absolute;
+  box-shadow: none;
+  border:     none;
+}
+
+.ts {
+  position:      absolute;
+  inset:         0;
+  background:    var(--surface-2);
+  border-radius: 21px;
+  cursor:        pointer;
+  transition:    background 200ms ease;
+}
+
+.ts::before {
+  content:       '';
+  position:      absolute;
+  width:         15px;
+  height:        15px;
+  left:          3px;
+  top:           3px;
+  background:    var(--text-3);
+  border-radius: 50%;
+  transition:    transform 200ms ease, background 200ms ease;
+}
+
+.tg input:checked + .ts {
+  background: var(--brand);
+}
+
+.tg input:checked + .ts::before {
+  transform:  translateX(17px);
+  background: #000;
+}
+
+/* ── BARRAS DE PROGRESO ─────────────────────────────────────────── */
+.pt {
+  width:         100%;
+  height:        8px;
+  background:    var(--surface-2);
+  border-radius: 0;
+  overflow:      hidden;
+  position:      relative;
+}
+
+.pf {
+  height:     100%;
+  transition: width 0.5s ease;
+  position:   relative;
+}
+
+.pf::after {
+  content:    '';
+  position:   absolute;
+  inset:      0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
+  animation:  shimmer 2s infinite;
+}
+
+/* ── BADGES DE RANGO ────────────────────────────────────────────── */
+.rank-badge {
+  font-family:          var(--font-sans);
+  font-size:            11px;
+  font-weight:          700;
+  padding:              2px 8px;
+  letter-spacing:       1px;
+  display:              inline-block;
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-s { color: var(--rank-s);  box-shadow: inset 0 0 0 0.5px var(--rank-s), 0 0 8px rgba(167, 139, 250, 0.4); }
+.rank-a { color: var(--warning); box-shadow: inset 0 0 0 0.5px var(--warning); }
+.rank-b { color: var(--brand);   box-shadow: inset 0 0 0 0.5px var(--brand); }
+.rank-c { color: var(--success); box-shadow: inset 0 0 0 0.5px var(--success); }
+.rank-d { color: var(--text-3);  box-shadow: inset 0 0 0 0.5px var(--text-3); }
+
+/* ── STREAK BAR ─────────────────────────────────────────────────── */
+.streak-bar {
+  display:     flex;
+  align-items: center;
+  gap:         12px;
+  padding:     12px 0;
+}
+
+.streak-label {
+  font-family:    var(--font-sans);
+  font-size:      10px;
+  color:          var(--text-3);
+  text-transform: uppercase;
+  white-space:    nowrap;
+}
+
+.streak-days {
+  display: flex;
+  gap:     6px;
+}
+
+.streak-day {
+  width:                30px;
+  height:               30px;
+  border-radius:        50%;
+  display:              flex;
+  align-items:          center;
+  justify-content:      center;
+  font-family:          var(--font-sans);
+  font-size:            11px;
+  color:                var(--text-4);
+  box-shadow:           inset 0 0 0 0.5px rgba(255,255,255,0.08);
+  transition:           all 200ms ease;
+  font-variant-numeric: tabular-nums;
+}
+
+.streak-day.done {
+  background: var(--brand);
+  color:      #000;
+  box-shadow: 0 0 8px var(--glow);
+}
+
+.streak-day.today {
+  box-shadow: inset 0 0 0 1.5px var(--success);
+  color:      var(--success);
+}
+
+.streak-day.done.today {
+  background: var(--brand);
+  box-shadow: inset 0 0 0 1.5px var(--success), 0 0 12px var(--glow-green);
+}
+
+/* ── TÍTULO DE SECCIÓN ──────────────────────────────────────────── */
+.stl {
+  font-family:    var(--font-sans);
+  font-size:      12px;
+  color:          var(--brand);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom:  16px;
+  display:        flex;
+  align-items:    center;
+  gap:            8px;
+}
+
+.stl::before {
+  content: '[ ';
+  color:   var(--text-4);
+}
+
+.stl::after {
+  content: ' ]';
+  color:   var(--text-4);
+}
+
+/* ── METRIC GRID ────────────────────────────────────────────────── */
+.mg {
+  display:               grid;
+  grid-template-columns: 1fr 1fr;
+  gap:                   12px;
+  margin-bottom:         12px;
+}
+
+.mb {
+  display:        flex;
+  flex-direction: column;
+  gap:            6px;
+}
+
+.ml {
+  font-family:    var(--font-sans);
+  font-size:      10px;
+  color:          var(--text-3);
+  text-transform: uppercase;
+}
+
+.mv {
+  font-family: var(--font-sans);
+  font-size:   22px;
+  color:       var(--brand);
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* ── OUTPUT IA ──────────────────────────────────────────────────── */
+.ib {
+  background:  var(--surface-1);
+  box-shadow:  inset 0 0 0 0.5px rgba(255,255,255,0.12);
+  padding:     16px;
+  min-height:  60px;
+  font-family: var(--font-sans);
+  font-size:   13px;
+  line-height: 1.7;
+  color:       var(--text-2);
+  white-space: pre-wrap;
+}
+
+/* ── ESTADOS VACÍOS ─────────────────────────────────────────────── */
+.empty-state {
+  text-align:  center;
+  padding:     32px 16px;
+  color:       var(--text-4);
+  font-family: var(--font-sans);
+  font-size:   12px;
+}

@@ -1,0 +1,274 @@
+/* OkiroSport — Variables, Reset, Layout Global */
+
+/* ── VARIABLES ──────────────────────────────────────────────────── */
+:root {
+  /* Fondo */
+  --bg-base:   #000000;
+  --surface-1: #0A0A0E;
+  --surface-2: #14141A;
+
+  /* Marca */
+  --brand:      #00D9FF;
+  --brand-soft: #7DD3FC;
+
+  /* Texto */
+  --text-1: #FFFFFF;
+  --text-2: #E8E8EC;
+  --text-3: #8E8E93;
+  --text-4: #48484A;
+
+  /* Estados */
+  --success: #34D399;
+  --warning: #FBBF24;
+  --danger:  #F87171;
+  --rank-s:  #A78BFA;
+
+  /* Tipografía */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Radios */
+  --radius-sm:   12px;
+  --radius-md:   16px;
+  --radius-lg:   24px;
+  --radius-xl:   32px;
+  --radius-pill: 100px;
+
+  /* Glow */
+  --glow-cyan:        0 0 16px rgba(0, 217, 255, 0.5);
+  --glow-cyan-strong: 0 0 24px rgba(0, 217, 255, 0.8);
+  --glow-white:       0 0 20px rgba(255, 255, 255, 0.4);
+
+  /* Compat — usados internamente por animaciones y transiciones */
+  --transition:  150ms ease;
+  --glow:        rgba(0, 217, 255, 0.25);
+  --glow-strong: rgba(0, 217, 255, 0.5);
+  --glow-green:  rgba(52, 211, 153, 0.25);
+}
+
+/* ── RESET Y BASE ───────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin:     0;
+  padding:    0;
+}
+
+html {
+  height:    100%;
+  font-size: 16px;
+}
+
+body {
+  background:                  var(--bg-base);
+  color:                       var(--text-2);
+  font-family:                 var(--font-sans);
+  font-weight:                 500;
+  -webkit-font-smoothing:      antialiased;
+  -moz-osx-font-smoothing:     grayscale;
+  font-variant-numeric:        tabular-nums;
+  height:                      100dvh;
+  overflow:                    hidden;
+  -webkit-tap-highlight-color: transparent;
+  margin:                      0;
+  padding:                     0;
+  min-height:                  100vh;
+}
+
+::selection {
+  background: var(--brand);
+  color:      #000;
+}
+
+#cnt {
+  scrollbar-width: none;
+}
+
+#cnt::-webkit-scrollbar {
+  display: none;
+}
+
+img {
+  max-width: 100%;
+  display:   block;
+}
+
+/* ── LAYOUT PRINCIPAL ───────────────────────────────────────────── */
+#app {
+  display:        flex;
+  flex-direction: column;
+  height:         100dvh;
+  max-width:      480px;
+  margin:         0 auto;
+  position:       relative;
+}
+
+#cnt {
+  flex:             1;
+  overflow-y:       auto;
+  overflow-x:       hidden;
+  scroll-behavior:  smooth;
+  padding:          16px 16px 0;
+}
+
+/* ── VIGNETTE ───────────────────────────────────────────────────── */
+#vignette {
+  position:       fixed;
+  inset:          0;
+  z-index:        9991;
+  pointer-events: none;
+  background:     radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.7) 100%);
+}
+
+/* ── PARTÍCULAS ─────────────────────────────────────────────────── */
+#particles {
+  position:       fixed;
+  inset:          0;
+  z-index:        1;
+  pointer-events: none;
+  overflow:       hidden;
+}
+
+#particles span {
+  position:   absolute;
+  width:      2px;
+  height:     2px;
+  border-radius: 50%;
+  background: var(--brand);
+  opacity:    0.15;
+  animation:  particle-float linear infinite;
+  will-change: transform, opacity;
+}
+
+#particles span:nth-child(1) { top: 12%; left:  8%; animation-duration: 18s; animation-delay:  0s; }
+#particles span:nth-child(2) { top: 35%; left: 82%; animation-duration: 22s; animation-delay:  3s; }
+#particles span:nth-child(3) { top: 58%; left: 23%; animation-duration: 16s; animation-delay:  6s; }
+#particles span:nth-child(4) { top: 75%; left: 65%; animation-duration: 25s; animation-delay:  1s; }
+#particles span:nth-child(5) { top: 20%; left: 47%; animation-duration: 20s; animation-delay:  8s; }
+#particles span:nth-child(6) { top: 88%; left: 15%; animation-duration: 14s; animation-delay:  4s; }
+#particles span:nth-child(7) { top: 45%; left: 91%; animation-duration: 19s; animation-delay:  7s; }
+#particles span:nth-child(8) { top: 68%; left: 38%; animation-duration: 23s; animation-delay:  2s; }
+
+@keyframes particle-float {
+  0%,
+  100% { transform: translateY(0)    scale(1);   opacity: 0.15; }
+  50%  { transform: translateY(-20px) scale(1.5); opacity: 0.3;  }
+}
+
+/* ── SCANLINES ──────────────────────────────────────────────────── */
+body::before {
+  content:        '';
+  position:       fixed;
+  inset:          0;
+  z-index:        9990;
+  pointer-events: none;
+  background:     repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent           2px,
+    rgba(0, 0, 0, 0.03)   2px,
+    rgba(0, 0, 0, 0.03)   4px
+  );
+}
+
+/* ── HEADER ─────────────────────────────────────────────────────── */
+#hdr {
+  display:         flex;
+  justify-content: space-between;
+  align-items:     center;
+  padding:         12px 16px;
+  box-shadow:      inset 0 -0.5px 0 rgba(255,255,255,0.08);
+  position:        relative;
+  z-index:         10;
+  flex-shrink:     0;
+}
+
+#hdr h1 {
+  font-family:    var(--font-sans);
+  font-size:      20px;
+  font-weight:    700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color:          var(--text-2);
+}
+
+#hdr h1 span {
+  color: var(--brand);
+}
+
+#hdr-right {
+  display:        flex;
+  flex-direction: column;
+  align-items:    flex-end;
+  gap:            2px;
+}
+
+#clk {
+  font-family:          var(--font-sans);
+  font-size:            18px;
+  color:                var(--brand);
+  line-height:          1;
+  font-variant-numeric: tabular-nums;
+}
+
+#fh {
+  font-family:    var(--font-sans);
+  font-size:      10px;
+  color:          var(--text-3);
+  text-transform: uppercase;
+}
+
+/* ── NAVEGACIÓN ─────────────────────────────────────────────────── */
+#nav {
+  display:     flex;
+  height:      60px;
+  box-shadow:  inset 0 0.5px 0 rgba(255,255,255,0.08);
+  background:  var(--surface-1);
+  flex-shrink: 0;
+  z-index:     10;
+}
+
+.nb {
+  flex:            1;
+  display:         flex;
+  flex-direction:  column;
+  align-items:     center;
+  justify-content: center;
+  gap:             3px;
+  border:          none;
+  background:      transparent;
+  color:           var(--text-3);
+  cursor:          pointer;
+  transition:      var(--transition);
+  border-top:      2px solid transparent;
+  min-height:      48px;
+  padding:         0;
+}
+
+.nb svg {
+  width:      18px;
+  height:     18px;
+  transition: var(--transition);
+}
+
+.nb span {
+  font-family:    var(--font-sans);
+  font-size:      9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height:    1;
+}
+
+.nb.active {
+  color:            var(--brand);
+  border-top-color: var(--brand);
+  background:       rgba(0, 217, 255, 0.05);
+}
+
+.nb.active svg {
+  filter: drop-shadow(0 0 4px var(--brand));
+}
+
+.nb:active {
+  transform: scale(0.95);
+}
