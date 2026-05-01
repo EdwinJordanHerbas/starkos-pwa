@@ -42,15 +42,6 @@
   to   { width: 100%; }
 }
 
-/* Glitch RGB — dispara 3 frames rápidos cada ~14 s */
-@keyframes glitchLoop {
-  0%, 96.9%   { text-shadow: none; }
-  97%         { text-shadow: -2px 0 #ff0000, 2px 0 #00ffff; }
-  97.5%       { text-shadow:  2px 0 #ff0000, -2px 0 #00ffff; }
-  98%         { text-shadow: -1px 0 #00ffff, 1px 0 #ff0000, 0 0 8px var(--brand); }
-  98.5%, 100% { text-shadow: none; }
-}
-
 /* Pulso genérico de box-shadow (0 → --glow-strong → 0) */
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 rgba(0, 217, 255, 0); }
@@ -121,14 +112,6 @@
 
 .sec.materialize-enter {
   animation: materialize 300ms ease forwards;
-}
-
-/* ════════════════════════════════════════════════════════════════ */
-/* GLITCH EN HEADER                                                 */
-/* ════════════════════════════════════════════════════════════════ */
-
-#hdr h1 {
-  animation: glitchLoop 14s infinite;
 }
 
 /* ════════════════════════════════════════════════════════════════ */

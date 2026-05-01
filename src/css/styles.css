@@ -155,22 +155,6 @@ img {
   50%  { transform: translateY(-20px) scale(1.5); opacity: 0.3;  }
 }
 
-/* ── SCANLINES ──────────────────────────────────────────────────── */
-body::before {
-  content:        '';
-  position:       fixed;
-  inset:          0;
-  z-index:        9990;
-  pointer-events: none;
-  background:     repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent           2px,
-    rgba(0, 0, 0, 0.03)   2px,
-    rgba(0, 0, 0, 0.03)   4px
-  );
-}
-
 /* ── HEADER ─────────────────────────────────────────────────────── */
 #hdr {
   display:         flex;
