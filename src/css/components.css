@@ -86,118 +86,226 @@
   transform: scale(0.97);
 }
 
+/* ── BOTONES GLASS ──────────────────────────────────────────────── */
+.btn-primary {
+  background:              rgba(0, 217, 255, 0.12);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter:         blur(20px);
+  color:                   var(--brand);
+  border:                  none;
+  border-radius:           var(--radius-pill);
+  padding:                 12px 20px;
+  font-family:             var(--font-sans);
+  font-weight:             600;
+  font-size:               13px;
+  letter-spacing:          0.5px;
+  cursor:                  pointer;
+  position:                relative;
+  overflow:                hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.4),
+    inset 0 -1px 0 rgba(0,0,0,0.3),
+    0 0 0 0.5px rgba(0, 217, 255, 0.5),
+    0 0 16px rgba(0, 217, 255, 0.2),
+    0 4px 12px rgba(0,0,0,0.4);
+  transition: all 0.2s ease;
+}
+
+.btn-primary::before {
+  content:       '';
+  position:      absolute;
+  top: 0; left: 0; right: 0;
+  height:        50%;
+  background:    linear-gradient(180deg, rgba(255,255,255,0.15), transparent);
+  pointer-events: none;
+  border-radius: var(--radius-pill) var(--radius-pill) 0 0;
+}
+
+.btn-primary:hover {
+  background: rgba(0, 217, 255, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.5),
+    0 0 0 0.5px rgba(0, 217, 255, 0.7),
+    0 0 24px rgba(0, 217, 255, 0.4),
+    0 4px 12px rgba(0,0,0,0.4);
+}
+
+.btn-primary:active {
+  transform: scale(0.97);
+}
+
+.btn-ghost {
+  background:     rgba(255, 255, 255, 0.05);
+  color:          var(--text-2);
+  border:         none;
+  border-radius:  var(--radius-pill);
+  padding:        12px 20px;
+  font-family:    var(--font-sans);
+  font-weight:    500;
+  font-size:      13px;
+  letter-spacing: 0.3px;
+  cursor:         pointer;
+  position:       relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.1),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 /* ── INPUTS Y FORMULARIOS ───────────────────────────────────────── */
-input[type=text],
-input[type=number] {
-  width:         100%;
-  background:    var(--surface-2);
-  box-shadow:    inset 0 0 0 0.5px rgba(255,255,255,0.08);
-  color:         var(--text-2);
-  font-family:   var(--font-sans);
-  font-size:     13px;
-  padding:       10px 12px;
-  outline:       none;
-  border-radius: var(--radius-md);
-  transition:    box-shadow var(--transition);
+button {
+  font-family: var(--font-sans);
+  cursor:      pointer;
 }
 
-input:focus {
-  box-shadow: inset 0 0 0 0.5px var(--brand), 0 0 8px var(--glow);
-}
-
-textarea {
-  width:         100%;
-  background:    var(--surface-2);
-  box-shadow:    inset 0 0 0 0.5px rgba(255,255,255,0.08);
-  color:         var(--text-2);
-  font-family:   var(--font-sans);
-  font-size:     13px;
-  padding:       10px 12px;
-  outline:       none;
-  border-radius: var(--radius-md);
-  transition:    box-shadow var(--transition);
-  resize:        none;
-  min-height:    80px;
-  line-height:   1.5;
+input[type="number"],
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea,
+select {
+  width:                   100%;
+  background:              rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter:         blur(20px);
+  border:                  none;
+  border-radius:           var(--radius-md);
+  padding:                 12px 14px;
+  color:                   var(--text-2);
+  font-family:             var(--font-sans);
+  font-size:               14px;
+  font-weight:             500;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.1),
+    inset 0 0 0 0.5px rgba(255,255,255,0.1);
+  transition:              all 0.2s ease;
+  box-sizing:              border-box;
 }
 
 select {
-  width:               100%;
-  background:          var(--surface-2);
-  box-shadow:          inset 0 0 0 0.5px rgba(255,255,255,0.08);
-  color:               var(--text-2);
-  font-family:         var(--font-sans);
-  font-size:           13px;
-  padding:             10px 32px 10px 12px;
-  outline:             none;
-  border-radius:       var(--radius-md);
-  transition:          box-shadow var(--transition);
-  cursor:              pointer;
-  -webkit-appearance:  none;
-  appearance:          none;
-  background-image:    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235a8ab0'/%3E%3C/svg%3E");
-  background-repeat:   no-repeat;
-  background-position: right 12px center;
-  background-size:     10px 6px;
-}
-
-input[type=range] {
-  width:              100%;
-  height:             4px;
   -webkit-appearance: none;
   appearance:         none;
-  background:         var(--surface-2);
-  border-radius:      0;
-  outline:            none;
   cursor:             pointer;
+  padding-right:      32px;
 }
 
-input[type=range]::-webkit-slider-thumb {
+input:focus,
+textarea:focus,
+select:focus {
+  outline:    none;
+  background: rgba(0, 217, 255, 0.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.15),
+    inset 0 0 0 1px rgba(0, 217, 255, 0.5),
+    0 0 12px rgba(0, 217, 255, 0.2);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color:       var(--text-4);
+  font-weight: 400;
+}
+
+textarea {
+  resize:      vertical;
+  min-height:  80px;
+  line-height: 1.5;
+}
+
+/* Range slider */
+input[type="range"] {
   -webkit-appearance: none;
   appearance:         none;
-  width:              20px;
-  height:             20px;
-  background:         var(--brand);
-  border-radius:      0;
-  cursor:             pointer;
+  height:             6px;
+  background:         rgba(0, 0, 0, 0.4);
+  border-radius:      3px;
+  padding:            0;
+  box-shadow:         inset 0 2px 4px rgba(0,0,0,0.4);
 }
 
-input[type=range]::-moz-range-thumb {
-  width:         20px;
-  height:        20px;
-  background:    var(--brand);
-  border-radius: 0;
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width:              18px;
+  height:             18px;
+  border-radius:      50%;
+  background:         linear-gradient(180deg, #5DE3FF 0%, #00D9FF 100%);
+  cursor:             pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.5),
+    inset 0 -1px 0 rgba(0,0,0,0.2),
+    0 0 12px rgba(0, 217, 255, 0.6),
+    0 2px 4px rgba(0,0,0,0.4);
+  transition: all 0.2s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.5),
+    0 0 16px rgba(0, 217, 255, 0.8),
+    0 2px 4px rgba(0,0,0,0.4);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width:         18px;
+  height:        18px;
   border:        none;
+  border-radius: 50%;
+  background:    linear-gradient(180deg, #5DE3FF 0%, #00D9FF 100%);
   cursor:        pointer;
+  box-shadow:    0 0 12px rgba(0, 217, 255, 0.6);
 }
 
-input[type=checkbox] {
+/* Checkboxes */
+input[type="checkbox"] {
   -webkit-appearance: none;
   appearance:         none;
-  width:              20px;
-  height:             20px;
-  box-shadow:         inset 0 0 0 1px rgba(255,255,255,0.15);
-  background:         transparent;
+  width:              22px;
+  height:             22px;
+  border-radius:      6px;
+  background:         rgba(255,255,255,0.05);
   cursor:             pointer;
   position:           relative;
   flex-shrink:        0;
-  transition:         all var(--transition);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.1),
+    inset 0 0 0 0.5px rgba(255,255,255,0.15);
+  transition: all 0.2s ease;
 }
 
-input[type=checkbox]:checked {
-  background:   var(--brand);
-  box-shadow:   inset 0 0 0 1px var(--brand);
+input[type="checkbox"]:checked {
+  background: linear-gradient(180deg, #00D9FF 0%, #0096B8 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.4),
+    0 0 12px rgba(0,217,255,0.5);
 }
 
-input[type=checkbox]:checked::after {
-  content:     '✓';
-  position:    absolute;
-  color:       #000;
-  font-size:   14px;
-  font-weight: 700;
-  top:         50%;
-  left:        50%;
-  transform:   translate(-50%, -50%);
+input[type="checkbox"]:checked::after {
+  content:         '✓';
+  position:        absolute;
+  inset:           0;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  color:           #fff;
+  font-weight:     700;
+  font-size:       14px;
+}
+
+/* Label */
+label {
+  font-family:    var(--font-sans);
+  font-size:      11px;
+  color:          var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight:    500;
+  margin-bottom:  6px;
+  display:        block;
 }
 
 /* ── TOGGLE (overrides checkbox para .tg) ───────────────────────── */
