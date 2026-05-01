@@ -46,15 +46,15 @@
     <div class="mb"><span class="ml">Sueño</span><input class="mi" id="is" type="number" min="0" max="12" step="0.5" value="7.5"><span style="font-size:.5rem;color:var(--text3)">horas</span></div>
     <div class="mb"><span class="ml">Energía</span><div class="mv" id="ev" style="color:var(--accent)">7</div><input type="range" id="ie" min="1" max="10" value="7"></div>
    </div>
-   <div class="card"><div class="ct">Entrenamiento</div>
+   <div class="card glass-cyan"><span class="corner corner-tl"></span><span class="corner corner-tr"></span><span class="corner corner-bl"></span><span class="corner corner-br"></span><div class="ct">Entrenamiento</div>
     <div class="tr"><span class="tl">Completado hoy</span><label class="tg"><input type="checkbox" id="iet"><span class="ts"></span></label></div>
     <div style="margin-top:10px"><select id="itt"><option value="gym">Fuerza · Gym</option><option value="run">Running</option><option value="gym+run">Gym + Running</option><option value="rest">Descanso activo</option><option value="off">Sin entreno</option></select></div>
    </div>
-   <div class="card"><div class="ct">Nutrición</div>
+   <div class="card glass"><div class="ct">Nutrición</div>
     <div class="mv" id="nv" style="color:var(--accent2)">7</div>
     <input type="range" id="in" min="1" max="10" value="7" style="accent-color:var(--accent2);margin-top:6px">
    </div>
-   <div class="card"><div class="ct">Tareas</div>
+   <div class="card glass-strong"><span class="corner corner-tl"></span><span class="corner corner-tr"></span><span class="corner corner-bl"></span><span class="corner corner-br"></span><div class="ct">Tareas</div>
     <div class="tr"><span class="tl">Completadas hoy</span><span style="font-size:.85rem;color:var(--accent)"><span id="td">0</span>/5</span></div>
     <span id="td-num">0 / 5 TAREAS</span>
     <div class="td-bar"><div class="td-fill" id="td-fill"></div></div>
@@ -63,20 +63,20 @@
      <button onclick="ct(1)" style="flex:1;padding:9px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--accent);font-size:1.1rem;cursor:pointer">+</button>
     </div>
    </div>
-   <div class="card"><div class="ct">Notas</div><textarea id="in2" placeholder="¿Cómo fue el día?"></textarea></div>
+   <div class="card glass"><div class="ct">Notas</div><textarea id="in2" placeholder="¿Cómo fue el día?"></textarea></div>
    <button class="bs" id="bsv" onclick="saveLog()">GUARDAR DÍA</button>
   </div>
 
   <!-- ── GYM ─────────────────────────────────────────── -->
   <div class="sec" id="sec-gym">
    <div class="stl">GYM</div>
-   <div id="gym-content"><div style="text-align:center;padding:40px;color:var(--text3);font-size:.7rem">Cargando...</div></div>
+   <div id="gym-content" class="glass"><div style="text-align:center;padding:40px;color:var(--text3);font-size:.7rem">Cargando...</div></div>
   </div>
 
   <!-- ── NUTRI ────────────────────────────────────────── -->
   <div class="sec" id="sec-nutri">
    <div class="stl">NUTRICIÓN</div>
-   <div class="card">
+   <div class="card glass-strong">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px">
      <div><div class="kcal-big" id="n-kcal">0</div><div class="kcal-label">KCAL HOY</div></div>
      <div style="text-align:right;font-size:.6rem;color:var(--text3)">
