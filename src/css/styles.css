@@ -76,8 +76,8 @@ body {
 }
 
 ::selection {
-  background: var(--brand);
-  color:      #000;
+  background: rgba(0, 217, 255, 0.3);
+  color:      #fff;
 }
 
 #cnt {
@@ -305,4 +305,28 @@ img {
 
 .nb:active {
   transform: scale(0.92);
+}
+
+/* ── SCROLLBAR CUSTOM ───────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width:  6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background:    rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 217, 255, 0.3);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
