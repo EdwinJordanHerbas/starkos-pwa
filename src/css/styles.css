@@ -65,6 +65,8 @@
 html {
   height:    100%;
   font-size: 16px;
+  -webkit-text-size-adjust: 100%;   /* iOS no infla el texto al rotar */
+  text-size-adjust:         100%;
 }
 
 body {
@@ -129,6 +131,12 @@ img {
 /* Toques más responsivos en móvil (sin retardo de doble tap) */
 button, select, .nb, .rc, .streak-day, .tg {
   touch-action: manipulation;
+}
+
+/* No seleccionar texto al pulsar/mantener botones y chrome de la UI */
+button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
+  -webkit-user-select: none;
+  user-select:         none;
 }
 
 /* ── ORBES DE LUZ ───────────────────────────────────────────────── */
