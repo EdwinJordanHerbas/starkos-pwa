@@ -3,11 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="OkiroSport — tu sistema personal de rendimiento híbrido: entrenamiento, nutrición con IA, proyectos y análisis diario.">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="OkiroSport">
 <link rel="manifest" href="manifest.json">
-<title>OkiroSport</title>
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<title>OkiroSport — Sistema de rendimiento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18,6 +23,18 @@
 </head>
 <body>
 <div id="splash"><h1>OKIROSPORT</h1><p>HYBRID ATHLETE · DIGITAL BUILDER</p><div class="sbar"><div class="sfill"></div></div></div>
+
+<!-- Pantalla de acceso (solo si el servidor tiene APP_TOKEN) -->
+<div id="lock" style="display:none">
+  <div class="lock-card">
+    <h2>OKIROSPORT</h2>
+    <p>Introduce tu clave de acceso</p>
+    <input type="password" id="lock-input" placeholder="Clave de acceso" autocomplete="current-password">
+    <button class="bs" onclick="unlock()">ENTRAR</button>
+    <div id="lock-err"></div>
+  </div>
+</div>
+
 <div id="mission-overlay" style="display:none">
   <div id="mission-modal">
     <div class="mm-corner" style="top:0;left:0"></div>
@@ -26,8 +43,8 @@
     <div class="mm-corner" style="bottom:0;right:0"></div>
     <div class="mm-title" id="mm-typewriter"></div>
     <div class="mm-body" id="mission-body"></div>
-    <button class="mm-btn-accept" id="mm-accept">[ ACEPTAR MISIONES ]</button>
-    <button class="mm-btn-skip" onclick="closeMissionModal()">[ SALTAR ]</button>
+    <button class="mm-btn-accept" id="mm-accept">ACEPTAR MISIONES</button>
+    <button class="mm-btn-skip" onclick="closeMissionModal()">SALTAR</button>
   </div>
 </div>
 <div id="vignette"></div>
@@ -35,15 +52,28 @@
   <span></span><span></span><span></span><span></span>
   <span></span><span></span><span></span><span></span>
 </div>
+<div id="toasts"></div>
 <div id="app">
- <div id="hdr"><div><h1>OKIROSPORT</h1><p id="fh">HOY</p></div><div id="hdr-right"><div id="clk">00:00</div><span id="day-num">000</span></div></div>
+ <div id="hdr"><div><p id="fh">HOY</p><h1>OKIRO<span>SPORT</span></h1></div><div id="hdr-right"><div id="clk">00:00</div><span id="day-num">DÍA 000</span></div></div>
  <div id="cnt">
 
   <!-- ── HOY ─────────────────────────────────────────── -->
   <div class="sec active" id="sec-hoy">
    <div class="stl">HOY</div>
+   <div class="streak-bar">
+    <span class="streak-label">Semana</span>
+    <div class="streak-days">
+     <span class="streak-day" data-day="L">L</span>
+     <span class="streak-day" data-day="M">M</span>
+     <span class="streak-day" data-day="X">X</span>
+     <span class="streak-day" data-day="J">J</span>
+     <span class="streak-day" data-day="V">V</span>
+     <span class="streak-day" data-day="S">S</span>
+     <span class="streak-day" data-day="D">D</span>
+    </div>
+   </div>
    <div class="mg">
-    <div class="mb"><span class="ml">Sueño</span><input class="mi" id="is" type="number" min="0" max="12" step="0.5" value="7.5"><span style="font-size:.5rem;color:var(--text-3)">horas</span></div>
+    <div class="mb"><span class="ml">Sueño</span><input class="mi" id="is" type="number" min="0" max="14" step="0.5" value="7.5" inputmode="decimal"><span style="font-size:.5rem;color:var(--text-3)">horas</span></div>
     <div class="mb"><span class="ml">Energía</span><div class="mv" id="ev" style="color:var(--brand)">7</div><input type="range" id="ie" min="1" max="10" value="7"></div>
    </div>
    <div class="card glass-cyan"><span class="corner corner-tl"></span><span class="corner corner-tr"></span><span class="corner corner-bl"></span><span class="corner corner-br"></span><div class="ct">Entrenamiento</div>
@@ -70,15 +100,17 @@
   <!-- ── GYM ─────────────────────────────────────────── -->
   <div class="sec" id="sec-gym">
    <div class="stl">GYM</div>
-   <div id="gym-content" class="glass"><div style="text-align:center;padding:40px;color:var(--text-3);font-size:.7rem">Cargando...</div></div>
+   <div id="gym-content"><div class="empty-state">Cargando...</div></div>
   </div>
 
   <!-- ── NUTRI ────────────────────────────────────────── -->
   <div class="sec" id="sec-nutri">
-   <div class="stl">NUTRICIÓN</div>
+   <div class="stl" style="display:flex;justify-content:space-between;align-items:center">NUTRICIÓN
+    <button onclick="editGoals()" style="background:none;border:none;color:var(--text-3);font-size:14px;cursor:pointer" aria-label="Editar objetivos">⚙</button>
+   </div>
    <div class="card glass-strong">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px">
-     <div><div class="kcal-big" id="n-kcal">0</div><div class="kcal-label">KCAL HOY</div></div>
+     <div><div class="kcal-big" id="n-kcal">0</div><div class="kcal-label" id="n-kcal-goal">/ 2400 KCAL</div></div>
      <div style="text-align:right;font-size:.6rem;color:var(--text-3)">
       P: <span id="n-prot" style="color:var(--success)">0</span>g &nbsp;
       C: <span id="n-carb" style="color:var(--brand)">0</span>g &nbsp;
@@ -94,7 +126,7 @@
      <div class="macro-bar"><div class="macro-fill" id="bar-fat" style="width:0%;background:var(--warning)"></div></div>
     </div>
    </div>
-   <input type="file" id="foto-input" accept="image/*" capture="environment" onchange="analizarFoto(this)">
+   <input type="file" id="foto-input" accept="image/*" capture="environment" onchange="analizarFoto(this)" style="display:none">
    <button class="photo-btn" id="btn-foto" onclick="document.getElementById('foto-input').click()">
     <span>◑</span> ANALIZAR FOTO IA
    </button>
@@ -102,15 +134,15 @@
     <div class="ct">NUEVA COMIDA</div>
     <div class="form-field" style="margin-bottom:8px">
      <label>Nombre</label>
-     <input id="m-nombre" placeholder="Pollo con arroz..." style="width:100%">
+     <input id="m-nombre" placeholder="Pollo con arroz...">
     </div>
     <div class="form-row">
-     <div class="form-field"><label>Kcal</label><input id="m-kcal" type="number" min="0" placeholder="0"></div>
-     <div class="form-field"><label>Proteínas (g)</label><input id="m-prot" type="number" min="0" placeholder="0"></div>
+     <div class="form-field"><label>Kcal</label><input id="m-kcal" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+     <div class="form-field"><label>Proteínas (g)</label><input id="m-prot" type="number" min="0" placeholder="0" inputmode="numeric"></div>
     </div>
     <div class="form-row">
-     <div class="form-field"><label>Carbos (g)</label><input id="m-carb" type="number" min="0" placeholder="0"></div>
-     <div class="form-field"><label>Grasas (g)</label><input id="m-fat" type="number" min="0" placeholder="0"></div>
+     <div class="form-field"><label>Carbos (g)</label><input id="m-carb" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+     <div class="form-field"><label>Grasas (g)</label><input id="m-fat" type="number" min="0" placeholder="0" inputmode="numeric"></div>
     </div>
     <button class="bs" onclick="guardarComida()" style="margin-top:6px">GUARDAR COMIDA</button>
     <button onclick="document.getElementById('add-meal-form').classList.remove('open')" style="width:100%;padding:10px;background:none;border:none;color:var(--text-3);font-family:var(--font-sans);font-size:.6rem;cursor:pointer;margin-top:4px">CANCELAR</button>
@@ -122,26 +154,21 @@
   <!-- ── PROYECTOS ─────────────────────────────────────── -->
   <div class="sec" id="sec-proyectos">
    <div class="stl">PROYECTOS</div>
-   <div id="pl"><div style="text-align:center;padding:40px;color:var(--text-3);font-size:.7rem">Cargando...</div></div>
+   <div id="pl"><div class="empty-state">Cargando...</div></div>
   </div>
 
   <!-- ── IA ────────────────────────────────────────────── -->
   <div class="sec" id="sec-ia">
    <div class="stl">ANÁLISIS IA</div>
-   <div class="card" style="margin-bottom:10px"><div class="ct">API Key Anthropic</div>
-    <input class="ak" id="ak" type="password" placeholder="sk-ant-...">
-    <button onclick="saveKey()" style="padding:7px 14px;background:none;border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:var(--text-3);font-family:var(--font-sans);font-size:.6rem;cursor:pointer">Guardar</button>
-    <div id="aks" style="font-size:.62rem;color:var(--text-3);margin-top:7px"></div>
-   </div>
    <button class="bia" id="bd" onclick="genIA('daily')">RESUMEN DIARIO</button>
    <button class="bia" id="bs2" onclick="genIA('weekly')">RESUMEN SEMANAL</button>
-   <div class="ib" id="io"><div class="ip">Aquí aparecerá tu análisis personalizado de entrenamiento, sueño, nutrición y proyectos.</div></div>
+   <div class="ib" id="io"><div class="ip">Tu coach IA analiza sueño, entreno, nutrición y proyectos. Pulsa un botón para generar el análisis — no necesitas configurar nada.</div></div>
   </div>
 
   <!-- ── LOG ───────────────────────────────────────────── -->
   <div class="sec" id="sec-log">
    <div class="stl">HISTORIAL</div>
-   <div id="hl"><div style="text-align:center;padding:40px;color:var(--text-3);font-size:.7rem">Cargando...</div></div>
+   <div id="hl"><div class="empty-state">Cargando...</div></div>
   </div>
 
  </div><!-- /cnt -->
@@ -155,12 +182,12 @@
  </nav>
 </div>
 
-<!-- MOCK: eliminar esta línea antes de subir a producción -->
+<!-- mock.js solo se activa en desarrollo con ?mock=1 — inofensivo en producción -->
 <script src="mock.js"></script>
 <script src="src/js/app.js"></script>
+<script src="src/js/projects.js"></script>
 <script src="src/js/gym.js"></script>
 <script src="src/js/nutrition.js"></script>
-<script src="src/js/projects.js"></script>
 <script src="src/js/ia.js"></script>
 </body>
 </html>

@@ -114,6 +114,16 @@ CREATE TABLE IF NOT EXISTS comidas (
 
 CREATE INDEX IF NOT EXISTS comidas_fecha_idx ON comidas(fecha);
 
+-- ── PROYECTOS ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS proyectos (
+  id            SERIAL PRIMARY KEY,
+  nombre        VARCHAR(200) NOT NULL,
+  objetivo      TEXT,
+  progreso      INTEGER DEFAULT 0 CHECK (progreso >= 0 AND progreso <= 100),
+  ultima_accion TEXT,
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ── DATOS DE EJEMPLO: RUTINAS ─────────────────────────────────
 INSERT INTO rutinas (nombre, descripcion, dias) VALUES
   ('PUSH', 'Pecho · Hombros · Tríceps', '["lunes","miércoles","viernes"]'),

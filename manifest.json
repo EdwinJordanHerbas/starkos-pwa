@@ -1,1 +1,33 @@
-{"name":"OkiroSport","short_name":"OkiroSport","start_url":"/","display":"standalone","background_color":"#0a0a0a","theme_color":"#0a0a0a"}
+{
+  "name": "OkiroSport — Sistema de rendimiento",
+  "short_name": "OkiroSport",
+  "description": "Tu sistema personal de rendimiento híbrido: entrenamiento, nutrición con IA, proyectos y análisis diario.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "lang": "es",
+  "categories": ["fitness", "health", "lifestyle", "productivity"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
