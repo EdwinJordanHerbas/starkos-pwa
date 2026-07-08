@@ -804,3 +804,37 @@ label {
   font-variant-numeric: tabular-nums;
   color:                var(--text-2);
 }
+
+/* ════════════════════════════════════════════════════════════════ */
+/* AJUSTES MÓVIL (iPhone)                                           */
+/* ════════════════════════════════════════════════════════════════ */
+
+/* La racha ocupa todo el ancho disponible sin desbordar */
+.streak-bar {
+  justify-content: space-between;
+}
+
+.streak-days {
+  flex:            1;
+  justify-content: space-between;
+  gap:             4px;
+  max-width:       320px;
+}
+
+@media (max-width: 767px) {
+  /* iOS hace auto-zoom si el input tiene <16px — esto lo elimina */
+  input[type="number"],
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select,
+  .lock-card input {
+    font-size: 16px;
+  }
+
+  .streak-day {
+    width:  28px;
+    height: 28px;
+  }
+}

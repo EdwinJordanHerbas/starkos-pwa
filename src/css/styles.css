@@ -110,7 +110,10 @@ img {
   margin:         0 auto;
   position:       relative;
   z-index:        2;
-  padding-bottom: 90px;
+  /* deja hueco para la nav flotante + barra de gestos del iPhone */
+  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  /* en modo app (standalone) el contenido pasa bajo la barra de estado */
+  padding-top:    env(safe-area-inset-top, 0px);
 }
 
 #cnt {
@@ -119,6 +122,13 @@ img {
   overflow-x:       hidden;
   scroll-behavior:  smooth;
   padding:          16px 16px 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Toques más responsivos en móvil (sin retardo de doble tap) */
+button, select, .nb, .rc, .streak-day, .tg {
+  touch-action: manipulation;
 }
 
 /* ── ORBES DE LUZ ───────────────────────────────────────────────── */
@@ -243,29 +253,30 @@ img {
   font-weight:    500;
 }
 
-/* ── NAVEGACIÓN ─────────────────────────────────────────────────── */
+/* ── NAVEGACIÓN — Liquid Glass (estilo iOS 26 / Instagram) ──────── */
 #nav {
   position:                fixed;
-  bottom:                  16px;
+  bottom:                  calc(14px + env(safe-area-inset-bottom, 0px));
   left:                    16px;
   right:                   16px;
-  background:              rgba(20, 20, 26, 0.55);
-  -webkit-backdrop-filter: blur(60px) saturate(200%);
-  backdrop-filter:         blur(60px) saturate(200%);
+  background:              rgba(16, 16, 22, 0.38);
+  -webkit-backdrop-filter: blur(36px) saturate(210%) brightness(1.12);
+  backdrop-filter:         blur(36px) saturate(210%) brightness(1.12);
   border-radius:           var(--radius-pill);
-  padding:                 12px 8px;
+  padding:                 7px;
   display:                 flex;
   justify-content:         space-around;
+  gap:                     2px;
   z-index:                 100;
   overflow:                hidden;
   max-width:               448px;
   margin-left:             auto;
   margin-right:            auto;
   box-shadow:
-    inset 0 1.5px 0 rgba(255,255,255,0.22),
-    inset 0 -1.5px 0 rgba(0,0,0,0.5),
-    0 0 0 0.5px rgba(255,255,255,0.1),
-    0 20px 50px rgba(0,0,0,0.7);
+    inset 0 1.5px 0 rgba(255,255,255,0.28),
+    inset 0 -1px 0 rgba(0,0,0,0.45),
+    0 0 0 0.5px rgba(255,255,255,0.12),
+    0 24px 60px rgba(0,0,0,0.75);
 }
 
 #nav::before {
@@ -273,46 +284,76 @@ img {
   position:   absolute;
   top: 0; left: 10%; right: 10%;
   height:     1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.65), transparent);
   pointer-events: none;
 }
 
 .nb {
-  background:     none;
-  border:         none;
-  color:          var(--text-3);
-  font-family:    var(--font-sans);
-  font-size:      9px;
-  font-weight:    500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  cursor:         pointer;
-  display:        flex;
-  flex-direction: column;
-  align-items:    center;
-  gap:            3px;
-  padding:        0 8px;
-  position:       relative;
-  z-index:        2;
-  transition:     color 0.2s ease;
+  background:      none;
+  border:          none;
+  color:           var(--text-3);
+  font-family:     var(--font-sans);
+  font-size:       8.5px;
+  font-weight:     600;
+  text-transform:  uppercase;
+  letter-spacing:  0.6px;
+  cursor:          pointer;
+  display:         flex;
+  flex-direction:  column;
+  align-items:     center;
+  justify-content: center;
+  gap:             3px;
+  flex:            1;
+  min-width:       44px;                /* área táctil mínima iOS */
+  padding:         8px 4px 7px;
+  position:        relative;
+  border-radius:   var(--radius-pill);
+  z-index:         2;
+  transition:      color 0.25s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* "Lente" de cristal que aparece bajo la pestaña activa */
+.nb::before {
+  content:       '';
+  position:      absolute;
+  inset:         0;
+  border-radius: inherit;
+  opacity:       0;
+  transform:     scale(0.6);
+  transition:    opacity 0.3s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index:       -1;
+  background:    linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.35),
+    inset 0 -1px 0 rgba(0,0,0,0.25),
+    0 0 0 0.5px rgba(255,255,255,0.10),
+    0 4px 14px rgba(0,0,0,0.35),
+    0 0 18px rgba(0, 217, 255, 0.15);
 }
 
 .nb.active {
   color:       var(--brand);
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.nb.active::before {
+  opacity:   1;
+  transform: scale(1);
 }
 
 .nb .ni {
-  font-size:   18px;
+  font-size:   20px;
   line-height: 1;
+  transition:  transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .nb.active .ni {
-  filter: drop-shadow(0 0 6px rgba(0, 217, 255, 0.7));
+  filter:    drop-shadow(0 0 8px rgba(0, 217, 255, 0.8));
+  transform: translateY(-1px);
 }
 
 .nb:active {
-  transform: scale(0.92);
+  transform: scale(0.9);
 }
 
 /* ── SCROLLBAR CUSTOM ───────────────────────────────────────────── */
@@ -342,7 +383,7 @@ img {
 /* ── TOASTS ─────────────────────────────────────────────────────── */
 #toasts {
   position:       fixed;
-  bottom:         96px;
+  bottom:         calc(100px + env(safe-area-inset-bottom, 0px));
   left:           50%;
   transform:      translateX(-50%);
   display:        flex;
