@@ -838,3 +838,12 @@ label {
     height: 28px;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════ */
+/* NÚMEROS Y DATOS EN MONOESPACIADA — estética "System"            */
+/* ════════════════════════════════════════════════════════════════ */
+.mv, .kcal-big, .kcal-label, #td, #td-num,
+.rank-badge, .set-val, .set-num, .macro-label,
+.li-date, .er2, .mi {
+  font-family: var(--font-mono);
+}

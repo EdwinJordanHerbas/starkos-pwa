@@ -15,7 +15,7 @@
 <title>OkiroSport — Sistema de rendimiento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="src/css/styles.css">
 <link rel="stylesheet" href="src/css/components.css">
 <link rel="stylesheet" href="src/css/sections.css">
@@ -54,7 +54,17 @@
 </div>
 <div id="toasts"></div>
 <div id="app">
- <div id="hdr"><div><p id="fh">HOY</p><h1>OKIRO<span>SPORT</span></h1></div><div id="hdr-right"><div id="clk">00:00</div><span id="day-num">DÍA 000</span></div></div>
+ <div id="hdr">
+  <div id="hdr-top">
+   <div><p id="fh">HOY</p><h1>OKIRO<span>SPORT</span></h1></div>
+   <div id="hdr-right"><div id="clk">00:00</div><span id="lvl-label">LVL 1</span></div>
+  </div>
+  <div id="xp-row">
+   <span id="rank-chip" class="rank-badge rank-d">D</span>
+   <div id="xp-bar"><div id="xp-fill"></div></div>
+   <span id="xp-text">0 / 80 XP</span>
+  </div>
+ </div>
  <div id="cnt">
 
   <!-- ── HOY ─────────────────────────────────────────── -->

@@ -289,7 +289,7 @@ async function saveLog() {
     const logsRes = await api('/logs');
     const logs    = logsRes.ok ? await logsRes.json() : [];
     updateStreakBar(logs);
-    updateDayNum(logs);
+    updatePlayer(logs);
 
   } catch {
     if (bsv) {
@@ -311,7 +311,7 @@ async function loadL() {
     const logs = await res.json();
 
     updateStreakBar(logs);
-    updateDayNum(logs);
+    updatePlayer(logs);
 
     if (!Array.isArray(logs) || !logs.length) {
       hl.innerHTML = '<div class="empty-state">Sin registros todavía. Guarda tu primer día en HOY.</div>';
@@ -341,12 +341,62 @@ async function loadL() {
   }
 }
 
-/* ── 12. DÍA NUM ────────────────────────────────────────────────── */
-function updateDayNum(logs) {
-  const el = document.getElementById('day-num');
-  if (!el) return;
-  const total = Array.isArray(logs) ? logs.filter(l => l.entreno_completado).length : 0;
-  el.textContent = `DÍA ${String(total).padStart(3, '0')}`;
+/* ── 12. NIVEL + XP (HUD del jugador, estilo "System") ──────────── */
+
+/* XP de un día según lo cumplido */
+function dayXP(l) {
+  let xp = 0;
+  if (l.entreno_completado) xp += 40;
+  const s = parseFloat(l.sueno) || 0;
+  if (s >= 7) xp += 15; else if (s > 0) xp += 5;
+  xp += (parseInt(l.energia)   || 0);
+  xp += (parseInt(l.nutricion) || 0);
+  xp += (parseInt(l.tareas_completadas) || 0) * 8;
+  if (l.notas && String(l.notas).trim()) xp += 5;
+  return xp;
+}
+
+/* Rango según nivel (D → S) */
+function rankForLevel(lvl) {
+  if (lvl >= 26) return ['S', 'rank-s'];
+  if (lvl >= 17) return ['A', 'rank-a'];
+  if (lvl >= 10) return ['B', 'rank-b'];
+  if (lvl >= 5)  return ['C', 'rank-c'];
+  return ['D', 'rank-d'];
+}
+
+function updatePlayer(logs) {
+  const windowed = Array.isArray(logs) ? logs.reduce((a, l) => a + dayXP(l), 0) : 0;
+
+  /* XP monotónica: nunca baja aunque un día salga de la ventana de 30 */
+  const prev = parseInt(localStorage.getItem('okiro_xp') || '0', 10) || 0;
+  const totalXP = Math.max(prev, windowed);
+  localStorage.setItem('okiro_xp', String(totalXP));
+
+  /* Curva: nivel L→L+1 requiere 80 + (L-1)·40 XP */
+  let lvl = 1, rem = totalXP, need = 80;
+  while (rem >= need) { rem -= need; lvl++; need = 80 + (lvl - 1) * 40; }
+
+  const lvlEl  = document.getElementById('lvl-label');
+  const fillEl = document.getElementById('xp-fill');
+  const xpEl   = document.getElementById('xp-text');
+  const chip   = document.getElementById('rank-chip');
+  const prevLvl = parseInt(localStorage.getItem('okiro_lvl') || '0', 10) || 0;
+
+  if (lvlEl)  lvlEl.textContent  = 'LVL ' + lvl;
+  if (fillEl) fillEl.style.width = Math.min(100, Math.round((rem / need) * 100)) + '%';
+  if (xpEl)   xpEl.textContent   = rem + ' / ' + need + ' XP';
+  if (chip) {
+    const [label, cls] = rankForLevel(lvl);
+    chip.textContent = label;
+    chip.className    = 'rank-badge ' + cls;
+  }
+
+  /* Aviso de subida de nivel */
+  if (prevLvl && lvl > prevLvl && typeof toast === 'function') {
+    toast(`⬆ NIVEL ${lvl} — RANGO ${rankForLevel(lvl)[0]}`, 'ok');
+  }
+  localStorage.setItem('okiro_lvl', String(lvl));
 }
 
 /* ── 13. STREAK BAR ─────────────────────────────────────────────── */
@@ -476,7 +526,7 @@ async function initData() {
     const res  = await api('/logs');
     const logs = res.ok ? await res.json() : [];
     updateStreakBar(logs);
-    updateDayNum(logs);
+    updatePlayer(logs);
     const log = Array.isArray(logs)
       ? logs.find(l => l.fecha && String(l.fecha).startsWith(hoyISO()) || (l.fecha?.toISOString?.() || '').startsWith(hoyISO()))
       : null;
