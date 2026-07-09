@@ -582,8 +582,17 @@ window.onload = async () => {
   const ok = await checkAccess();
   if (ok) initData();
 
-  /* Service worker (PWA offline + instalable) */
+  /* Service worker (PWA offline + instalable + auto-actualización) */
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    let refreshing = false;
+    /* Cuando una versión nueva toma el control, recarga sola (1 vez) */
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => { reg.update(); })
+      .catch(() => {});
   }
 };

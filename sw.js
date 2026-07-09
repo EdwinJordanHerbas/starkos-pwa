@@ -3,7 +3,7 @@
 //  · Estáticos (css/js/iconos/fuentes): cache-first con actualización en segundo plano
 //  · Navegación (index.html): network-first con fallback a caché (offline)
 //  · API (/logs, /rutinas, ...): siempre red — nunca cachear datos
-const VERSION = 'okiro-v3.0.4';
+const VERSION = 'okiro-v3.0.5';
 const STATIC_CACHE = `${VERSION}-static`;
 
 const PRECACHE = [
@@ -30,9 +30,14 @@ const API_PREFIXES = ['/logs', '/proyectos', '/rutinas', '/ejercicios', '/sesion
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then(cache => cache.addAll(PRECACHE))
-      .then(() => self.skipWaiting())
+    caches.open(STATIC_CACHE).then(cache =>
+      /* {cache:'reload'} fuerza descarga fresca, ignorando la caché HTTP */
+      Promise.all(PRECACHE.map(url =>
+        fetch(new Request(url, { cache: 'reload' }))
+          .then(res => res.ok ? cache.put(url, res) : null)
+          .catch(() => null)
+      ))
+    ).then(() => self.skipWaiting())
   );
 });
 
