@@ -120,6 +120,89 @@ function ss(n, btn) {
   if (n === 'nutri'     && typeof loadNutri === 'function') loadNutri();
   if (n === 'proyectos' && typeof loadP     === 'function') loadP();
   if (n === 'log')       loadL();
+
+  if (typeof window.positionNavLens === 'function') window.positionNavLens();
+}
+
+/* ── 7b. NAV DESLIZANTE (lente que sigue el dedo, estilo iOS) ────── */
+function setupNav() {
+  const nav  = document.getElementById('nav');
+  const lens = document.getElementById('nav-lens');
+  if (!nav || !lens) return;
+  const btns = Array.from(nav.querySelectorAll('.nb'));
+  if (!btns.length) return;
+
+  const lensTo = (btn) => {
+    if (!btn) return;
+    lens.style.width     = btn.offsetWidth + 'px';
+    lens.style.transform = `translateX(${btn.offsetLeft}px)`;
+  };
+  const currentBtn = () => nav.querySelector('.nb.active') || btns[0];
+  window.positionNavLens = () => lensTo(currentBtn());
+
+  const btnAtX = (clientX) => {
+    const r = nav.getBoundingClientRect();
+    const x = clientX - r.left;
+    for (const b of btns) {
+      if (x >= b.offsetLeft && x <= b.offsetLeft + b.offsetWidth) return b;
+    }
+    return x <= btns[0].offsetLeft ? btns[0] : btns[btns.length - 1];
+  };
+  const followX = (clientX) => {
+    const r = nav.getBoundingClientRect();
+    const w = lens.offsetWidth || btns[0].offsetWidth;
+    const min = btns[0].offsetLeft;
+    const max = btns[btns.length - 1].offsetLeft;
+    let left = clientX - r.left - w / 2;
+    left = Math.max(min, Math.min(max, left));
+    lens.style.transform = `translateX(${left}px)`;
+  };
+  const setHover = (btn) => btns.forEach(b => b.classList.toggle('drag-hover', b === btn));
+
+  let dragging = false;
+  nav.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    nav.classList.add('dragging');
+    try { nav.setPointerCapture(e.pointerId); } catch {}
+    followX(e.clientX);
+    setHover(btnAtX(e.clientX));
+  });
+  nav.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    followX(e.clientX);
+    setHover(btnAtX(e.clientX));
+  });
+  const finish = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    nav.classList.remove('dragging');   // vuelve la transición muelle
+    setHover(null);
+    const btn = btnAtX(e.clientX);
+    if (btn && !btn.classList.contains('active')) {
+      ss(btn.dataset.sec, btn);         // ss() reposiciona la lente
+    } else {
+      window.positionNavLens();         // asienta la lente en el activo
+    }
+  };
+  nav.addEventListener('pointerup', finish);
+  nav.addEventListener('pointercancel', () => {
+    dragging = false;
+    nav.classList.remove('dragging');
+    setHover(null);
+    window.positionNavLens();
+  });
+
+  window.addEventListener('resize', () => window.positionNavLens());
+  requestAnimationFrame(() => window.positionNavLens());
+}
+
+/* ── 7c. BLOQUEAR ZOOM (pinch) — comportamiento de app ──────────── */
+/* El doble-tap-zoom lo mata `touch-action: manipulation` (CSS, en body),
+   y el zoom por pellizco lo bloquean estos gestos + user-scalable=no. */
+function blockZoom() {
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev =>
+    document.addEventListener(ev, (e) => e.preventDefault(), { passive: false })
+  );
 }
 
 /* ── 8. CONTADOR DE TAREAS ──────────────────────────────────────── */
@@ -440,6 +523,10 @@ window.onload = async () => {
 
   /* Sección inicial */
   ss('hoy', document.querySelector('.nb'));
+
+  /* Nav deslizante + bloqueo de zoom */
+  setupNav();
+  blockZoom();
 
   /* Acceso + datos */
   const ok = await checkAccess();

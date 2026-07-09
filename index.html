@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="description" content="OkiroSport — tu sistema personal de rendimiento híbrido: entrenamiento, nutrición con IA, proyectos y análisis diario.">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -173,12 +173,13 @@
 
  </div><!-- /cnt -->
  <nav id="nav">
-  <button class="nb active" onclick="ss('hoy',this)"><span class="ni">◎</span>HOY</button>
-  <button class="nb" onclick="ss('gym',this)"><span class="ni">▣</span>GYM</button>
-  <button class="nb" onclick="ss('nutri',this)"><span class="ni">◑</span>NUTRI</button>
-  <button class="nb" onclick="ss('proyectos',this)"><span class="ni">◈</span>PROJ</button>
-  <button class="nb" onclick="ss('ia',this)"><span class="ni">◇</span>IA</button>
-  <button class="nb" onclick="ss('log',this)"><span class="ni">◉</span>LOG</button>
+  <div id="nav-lens"></div>
+  <button class="nb active" data-sec="hoy"><span class="ni">◎</span>HOY</button>
+  <button class="nb" data-sec="gym"><span class="ni">▣</span>GYM</button>
+  <button class="nb" data-sec="nutri"><span class="ni">◑</span>NUTRI</button>
+  <button class="nb" data-sec="proyectos"><span class="ni">◈</span>PROJ</button>
+  <button class="nb" data-sec="ia"><span class="ni">◇</span>IA</button>
+  <button class="nb" data-sec="log"><span class="ni">◉</span>LOG</button>
  </nav>
 </div>
 
