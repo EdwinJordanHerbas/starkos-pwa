@@ -5,8 +5,16 @@ const A          = '';
 const DIAS       = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 const DIAS_LABEL = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
 let tdCount = 0;
+let currentViewDate = new Date();
+const currentViewISO = () => {
+  const d = currentViewDate;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
 
-const hoyISO = () => new Date().toISOString().split('T')[0];
+const hoyISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
 
 /* ── 2. API (añade la clave de acceso a cada petición) ──────────── */
 async function api(path, opts = {}) {
@@ -105,6 +113,24 @@ function typewriterEffect(el, text, speed = 30, onDone) {
     }
   };
   tick();
+}
+
+/* ── 6b. INDICADOR OFFLINE ──────────────────────────────────────── */
+function setupOfflineIndicator() {
+  const banner = document.getElementById('offline-banner');
+  if (!banner) return;
+
+  const update = () => {
+    if (!navigator.onLine) {
+      banner.classList.add('visible');
+    } else {
+      banner.classList.remove('visible');
+    }
+  };
+
+  window.addEventListener('online',  update);
+  window.addEventListener('offline', update);
+  update(); /* estado inicial */
 }
 
 /* ── 7. NAVEGACIÓN ──────────────────────────────────────────────── */
@@ -208,14 +234,95 @@ function blockZoom() {
 /* ── 8. CONTADOR DE TAREAS ──────────────────────────────────────── */
 function ct(d) {
   tdCount = Math.max(0, Math.min(5, tdCount + d));
+  updateTaskUI();
+  renderTaskDots();
+}
 
+function updateTaskUI() {
   const tdEl   = document.getElementById('td');
   const numEl  = document.getElementById('td-num');
   const fillEl = document.getElementById('td-fill');
-
   if (tdEl)   tdEl.textContent   = tdCount;
   if (numEl)  numEl.textContent  = `${tdCount} / 5 TAREAS`;
   if (fillEl) fillEl.style.width = `${(tdCount / 5) * 100}%`;
+}
+
+function renderTaskDots() {
+  const dots = document.querySelectorAll('.task-dot');
+  dots.forEach((dot, idx) => {
+    dot.classList.toggle('active', idx < tdCount);
+  });
+}
+
+function toggleTaskDot(i) {
+  /* Si toco el último activo: lo desactivo (baja uno). Si toco cualquier otro: activo hasta ahí. */
+  tdCount = (i === tdCount) ? i - 1 : i;
+  tdCount = Math.max(0, Math.min(5, tdCount));
+  updateTaskUI();
+  renderTaskDots();
+}
+
+/* ── 8b. NAVEGADOR DE FECHA (HOY) ───────────────────────────────── */
+function navigateDay(delta) {
+  currentViewDate = new Date(currentViewDate);
+  currentViewDate.setDate(currentViewDate.getDate() + delta);
+  updateDateNavUI();
+  loadDayLogByDate(currentViewISO());
+}
+
+function updateDateNavUI() {
+  const labelEl = document.getElementById('date-nav-label');
+  const badgeEl = document.getElementById('date-nav-badge');
+
+  const todayStr = hoyISO();
+  const viewStr  = currentViewISO();
+
+  const dia = DIAS_LABEL[currentViewDate.getDay()];
+  const dd  = String(currentViewDate.getDate()).padStart(2, '0');
+  const mes = currentViewDate.toLocaleString('es', { month: 'short' }).toUpperCase();
+
+  if (labelEl) labelEl.textContent = `${dia} · ${dd} ${mes}`;
+
+  const isToday = viewStr === todayStr;
+  if (badgeEl) {
+    badgeEl.textContent = isToday ? 'HOY' : (viewStr < todayStr ? 'PASADO' : 'FUTURO');
+    badgeEl.className   = 'date-nav-badge' + (isToday ? ' today' : '');
+  }
+
+  const bsv = document.getElementById('bsv');
+  if (bsv && !bsv.disabled) {
+    bsv.textContent = isToday ? 'GUARDAR DÍA' : `GUARDAR ${dd} ${mes}`;
+  }
+}
+
+async function loadDayLogByDate(dateStr) {
+  try {
+    const res  = await api('/logs');
+    const logs = res.ok ? await res.json() : [];
+    resetHoyForm();
+    const log = Array.isArray(logs)
+      ? logs.find(l => l.fecha && String(l.fecha).startsWith(dateStr))
+      : null;
+    if (log) aplicarLogHoy(log);
+  } catch {}
+}
+
+function resetHoyForm() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('is',  7.5);
+  set('ie',  7);
+  set('in',  7);
+  set('itt', 'gym');
+  set('in2', '');
+  const iet = document.getElementById('iet');
+  if (iet) iet.checked = false;
+  const ev = document.getElementById('ev');
+  const nv = document.getElementById('nv');
+  if (ev) ev.textContent = '7';
+  if (nv) nv.textContent = '7';
+  tdCount = 0;
+  updateTaskUI();
+  renderTaskDots();
 }
 
 /* ── 9. PREFILL: carga el log de hoy en el formulario ───────────── */
@@ -236,7 +343,8 @@ function aplicarLogHoy(log) {
   if (iet) iet.checked = !!log.entreno_completado;
 
   tdCount = parseInt(log.tareas_completadas) || 0;
-  ct(0);
+  updateTaskUI();
+  renderTaskDots();
 }
 
 /* ── 10. GUARDAR DÍA ────────────────────────────────────────────── */
@@ -250,7 +358,7 @@ async function saveLog() {
   const bsv   = document.getElementById('bsv');
 
   const payload = {
-    fecha:               hoyISO(),
+    fecha:               currentViewISO(),
     sueno:               parseFloat(isEl?.value)    || 0,
     energia:             parseInt(ieEl?.value)       || 0,
     entreno_completado:  ietEl?.checked              || false,
@@ -521,6 +629,10 @@ async function showMissionModal() {
 
 /* ── 16. CARGA INICIAL DE DATOS ─────────────────────────────────── */
 async function initData() {
+  /* Init navegador de fecha */
+  currentViewDate = new Date();
+  updateDateNavUI();
+
   /* Prefill de HOY + racha + día */
   try {
     const res  = await api('/logs');
@@ -574,9 +686,15 @@ window.onload = async () => {
   /* Sección inicial */
   ss('hoy', document.querySelector('.nb'));
 
+  /* Fecha inicial del navegador HOY (antes de que lleguen datos del servidor) */
+  updateDateNavUI();
+
   /* Nav deslizante + bloqueo de zoom */
   setupNav();
   blockZoom();
+
+  /* Indicador de conexión */
+  setupOfflineIndicator();
 
   /* Acceso + datos */
   const ok = await checkAccess();

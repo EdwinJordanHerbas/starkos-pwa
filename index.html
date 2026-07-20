@@ -53,6 +53,26 @@
   <span></span><span></span><span></span><span></span>
 </div>
 <div id="toasts"></div>
+<div id="offline-banner">⚡ SIN CONEXIÓN</div>
+
+<!-- Modal de edición de proyecto (reemplaza los prompt()) -->
+<div id="edit-proj-overlay" style="display:none">
+  <div class="ep-modal">
+    <div class="ct" style="margin-bottom:16px">ACTUALIZAR PROYECTO</div>
+    <div class="form-field" style="margin-bottom:12px">
+      <label>Última acción</label>
+      <input type="text" id="ep-accion" placeholder="¿Qué hiciste hoy?">
+    </div>
+    <div class="form-field" style="margin-bottom:18px">
+      <label>Progreso: <span id="ep-prog-val" style="color:var(--brand)">0%</span></label>
+      <input type="range" id="ep-prog" min="0" max="100" value="0"
+             oninput="document.getElementById('ep-prog-val').textContent=this.value+'%'"
+             style="margin-top:8px">
+    </div>
+    <button class="bs" onclick="saveEditP()" style="margin-bottom:8px">GUARDAR CAMBIOS</button>
+    <button onclick="closeEditProjModal()" style="width:100%;padding:10px;background:none;border:none;color:var(--text-3);font-family:var(--font-sans);font-size:.6rem;cursor:pointer">CANCELAR</button>
+  </div>
+</div>
 <div id="app">
  <div id="hdr">
   <div id="hdr-top">
@@ -70,6 +90,15 @@
   <!-- ── HOY ─────────────────────────────────────────── -->
   <div class="sec active" id="sec-hoy">
    <div class="stl">HOY</div>
+   <!-- Navegador de fecha -->
+   <div class="date-nav glass">
+    <button class="date-nav-btn" onclick="navigateDay(-1)" id="btn-prev-day">◀</button>
+    <div class="date-nav-center">
+     <span class="date-nav-label" id="date-nav-label">HOY</span>
+     <span class="date-nav-badge today" id="date-nav-badge">HOY</span>
+    </div>
+    <button class="date-nav-btn" onclick="navigateDay(1)" id="btn-next-day">▶</button>
+   </div>
    <div class="streak-bar">
     <span class="streak-label">Semana</span>
     <div class="streak-days">
@@ -94,14 +123,20 @@
     <div class="mv" id="nv" style="color:var(--success)">7</div>
     <input type="range" id="in" min="1" max="10" value="7" style="accent-color:var(--success);margin-top:6px">
    </div>
-   <div class="card glass-strong"><span class="corner corner-tl"></span><span class="corner corner-tr"></span><span class="corner corner-bl"></span><span class="corner corner-br"></span><div class="ct">Tareas</div>
-    <div class="tr"><span class="tl">Completadas hoy</span><span style="font-size:.85rem;color:var(--brand)"><span id="td">0</span>/5</span></div>
-    <span id="td-num">0 / 5 TAREAS</span>
-    <div class="td-bar"><div class="td-fill" id="td-fill"></div></div>
-    <div style="display:flex;gap:8px;margin-top:9px">
-     <button onclick="ct(-1)" style="flex:1;padding:9px;background:var(--surface-2);border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:var(--text-2);font-size:1.1rem;cursor:pointer">−</button>
-     <button onclick="ct(1)" style="flex:1;padding:9px;background:var(--surface-2);border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:var(--brand);font-size:1.1rem;cursor:pointer">+</button>
+   <div class="card glass-strong"><span class="corner corner-tl"></span><span class="corner corner-tr"></span><span class="corner corner-bl"></span><span class="corner corner-br"></span>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+     <div class="ct" style="margin-bottom:0">Tareas del día</div>
+     <span style="font-family:var(--font-mono);font-size:.85rem;color:var(--brand)"><span id="td">0</span>/5</span>
     </div>
+    <div class="task-dots" id="task-dots">
+     <button class="task-dot" data-i="1" onclick="toggleTaskDot(1)"></button>
+     <button class="task-dot" data-i="2" onclick="toggleTaskDot(2)"></button>
+     <button class="task-dot" data-i="3" onclick="toggleTaskDot(3)"></button>
+     <button class="task-dot" data-i="4" onclick="toggleTaskDot(4)"></button>
+     <button class="task-dot" data-i="5" onclick="toggleTaskDot(5)"></button>
+    </div>
+    <span id="td-num" style="display:block;text-align:center;margin-bottom:8px">0 / 5 TAREAS</span>
+    <div class="td-bar"><div class="td-fill" id="td-fill"></div></div>
    </div>
    <div class="card glass"><div class="ct">Notas</div><textarea id="in2" placeholder="¿Cómo fue el día?"></textarea></div>
    <button class="bs" id="bsv" onclick="saveLog()">GUARDAR DÍA</button>
@@ -168,7 +203,8 @@
   </div>
 
   <!-- ── IA ────────────────────────────────────────────── -->
-  <div class="sec" id="sec-ia">
+  <!-- IA movida fuera del nav principal — accesible desde ajustes -->
+  <div class="sec" id="sec-ia" style="display:none">
    <div class="stl">ANÁLISIS IA</div>
    <button class="bia" id="bd" onclick="genIA('daily')">RESUMEN DIARIO</button>
    <button class="bia" id="bs2" onclick="genIA('weekly')">RESUMEN SEMANAL</button>
@@ -188,7 +224,6 @@
   <button class="nb" data-sec="gym"><span class="ni">▣</span>GYM</button>
   <button class="nb" data-sec="nutri"><span class="ni">◑</span>NUTRI</button>
   <button class="nb" data-sec="proyectos"><span class="ni">◈</span>PROJ</button>
-  <button class="nb" data-sec="ia"><span class="ni">◇</span>IA</button>
   <button class="nb" data-sec="log"><span class="ni">◉</span>LOG</button>
  </nav>
 </div>

@@ -204,6 +204,11 @@
       return mockOk({ ok: true });
     }
 
+    // DELETE /proyectos/:id
+    if (/\/proyectos\/\d+$/.test(u) && opts?.method === 'DELETE') {
+      return mockOk({ ok: true });
+    }
+
     // POST /logs — simula guardar log del día
     if (u.endsWith('/logs') && opts?.method === 'POST') {
       return mockOk({ ok: true });

@@ -9,6 +9,7 @@ const app = express();
 // ════════════════════════════════════════════════════════
 const PORT           = parseInt(process.env.PORT || '3000', 10);
 const APP_TOKEN      = process.env.APP_TOKEN || '';                 // clave de acceso única (mono-usuario)
+const APP_USER_NAME  = process.env.APP_USER_NAME || 'Stark';
 const AI_MODEL       = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
 const AI_DAILY_LIMIT = parseInt(process.env.AI_DAILY_LIMIT || '40', 10);
 const ANTHROPIC_KEY  = process.env.ANTHROPIC_API_KEY;
@@ -24,8 +25,11 @@ app.use(express.static(__dirname, {
 }));
 
 // ── CORS ─────────────────────────────────────────────────
+const PROD_ORIGIN = 'https://okirosport.es';
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', 'https://okirosport.es');
+  const origin = req.headers.origin || '';
+  const isDev  = process.env.NODE_ENV === 'development' || /^https?:\/\/localhost(:\d+)?$/.test(origin);
+  res.setHeader('Access-Control-Allow-Origin', isDev ? (origin || PROD_ORIGIN) : PROD_ORIGIN);
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -178,6 +182,13 @@ app.put('/proyectos/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.delete('/proyectos/:id', async (req, res) => {
+  try {
+    await db('DELETE FROM proyectos WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ════════════════════════════════════════════════════════
 // RUTINAS & GYM
 // ════════════════════════════════════════════════════════
@@ -303,7 +314,12 @@ app.put('/sesiones/:id/completar', async (req, res) => {
 // ════════════════════════════════════════════════════════
 const S_ID  = process.env.STRAVA_CLIENT_ID;
 const S_SEC = process.env.STRAVA_CLIENT_SECRET;
-const S_TOK = process.env.STRAVA_WEBHOOK_TOKEN || 'okirosport2024';
+const S_TOK = (() => {
+  if (process.env.STRAVA_WEBHOOK_TOKEN) return process.env.STRAVA_WEBHOOK_TOKEN;
+  if (process.env.NODE_ENV === 'development') return 'okirosport2024';
+  console.error('FATAL: STRAVA_WEBHOOK_TOKEN no está definido. Configúralo en producción antes de arrancar.');
+  process.exit(1);
+})();
 
 app.get('/strava/status', async (req, res) => {
   const configured = !!(S_ID && S_SEC);
@@ -503,7 +519,7 @@ async function buildPromptDaily() {
   );
   const entreno = logHoy.entreno_completado ? `sí (${logHoy.tipo_entreno || 'sin tipo'})` : 'no';
   return `Eres el sistema de análisis de rendimiento de OkiroSport.
-Atleta: Edwin Jordan. Híbrido gym + running + emprendedor.
+Atleta: ${APP_USER_NAME}. Híbrido gym + running + emprendedor.
 
 LOG DE HOY:
 - Sueño: ${logHoy.sueno || '—'}h | Energía: ${logHoy.energia || '—'}/10
@@ -537,7 +553,7 @@ async function buildPromptWeekly() {
   const totalTareas = logs.reduce((s, l) => s + (parseInt(l.tareas_completadas) || 0), 0);
   const tipos = [...new Set(logs.filter(l => l.entreno_completado && l.tipo_entreno).map(l => l.tipo_entreno))].join(', ') || 'ninguno';
   return `Eres el sistema de análisis de rendimiento de OkiroSport.
-Atleta: Edwin Jordan. Híbrido gym + running + emprendedor.
+Atleta: ${APP_USER_NAME}. Híbrido gym + running + emprendedor.
 
 RESUMEN SEMANAL (últimos 7 días):
 - Días con entrenamiento: ${diasEntreno}/7
