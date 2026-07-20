@@ -99,6 +99,7 @@
     </div>
     <button class="date-nav-btn" onclick="navigateDay(1)" id="btn-next-day">▶</button>
    </div>
+   <!-- Racha semanal -->
    <div class="streak-bar">
     <span class="streak-label">Semana</span>
     <div class="streak-days">
@@ -111,35 +112,19 @@
      <span class="streak-day" data-day="D">D</span>
     </div>
    </div>
-   <div class="mg">
-    <div class="mb"><span class="ml">Sueño</span><input class="mi" id="is" type="number" min="0" max="14" step="0.5" value="7.5" inputmode="decimal"><span style="font-size:.5rem;color:var(--text-3)">horas</span></div>
-    <div class="mb"><span class="ml">Energía</span><div class="mv" id="ev" style="color:var(--brand)">7</div><input type="range" id="ie" min="1" max="10" value="7"></div>
+   <!-- Score de energía (renderizado por JS) -->
+   <div class="hoy-energy-ring" id="hoy-energy-ring">
+    <div class="hoy-loading">Cargando...</div>
    </div>
-   <div class="card glass-cyan"><span class="corner corner-tl"></span><span class="corner corner-tr"></span><span class="corner corner-bl"></span><span class="corner corner-br"></span><div class="ct">Entrenamiento</div>
-    <div class="tr"><span class="tl">Completado hoy</span><label class="tg"><input type="checkbox" id="iet"><span class="ts"></span></label></div>
-    <div style="margin-top:10px"><select id="itt"><option value="gym">Fuerza · Gym</option><option value="run">Running</option><option value="gym+run">Gym + Running</option><option value="rest">Descanso activo</option><option value="off">Sin entreno</option></select></div>
+   <!-- Checklist readonly (renderizado por JS) -->
+   <div class="hoy-checklist" id="hoy-checklist"></div>
+   <!-- Línea XP/nivel -->
+   <div class="hoy-streak-bar" id="hoy-streak-info"></div>
+   <!-- Nota del día — única parte editable -->
+   <div class="card glass hoy-nota-wrap">
+    <div class="ct">Nota del día</div>
+    <textarea class="hoy-nota" id="nota-dia" placeholder="Anotación del día..."></textarea>
    </div>
-   <div class="card glass"><div class="ct">Nutrición</div>
-    <div class="mv" id="nv" style="color:var(--success)">7</div>
-    <input type="range" id="in" min="1" max="10" value="7" style="accent-color:var(--success);margin-top:6px">
-   </div>
-   <div class="card glass-strong"><span class="corner corner-tl"></span><span class="corner corner-tr"></span><span class="corner corner-bl"></span><span class="corner corner-br"></span>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-     <div class="ct" style="margin-bottom:0">Tareas del día</div>
-     <span style="font-family:var(--font-mono);font-size:.85rem;color:var(--brand)"><span id="td">0</span>/5</span>
-    </div>
-    <div class="task-dots" id="task-dots">
-     <button class="task-dot" data-i="1" onclick="toggleTaskDot(1)"></button>
-     <button class="task-dot" data-i="2" onclick="toggleTaskDot(2)"></button>
-     <button class="task-dot" data-i="3" onclick="toggleTaskDot(3)"></button>
-     <button class="task-dot" data-i="4" onclick="toggleTaskDot(4)"></button>
-     <button class="task-dot" data-i="5" onclick="toggleTaskDot(5)"></button>
-    </div>
-    <span id="td-num" style="display:block;text-align:center;margin-bottom:8px">0 / 5 TAREAS</span>
-    <div class="td-bar"><div class="td-fill" id="td-fill"></div></div>
-   </div>
-   <div class="card glass"><div class="ct">Notas</div><textarea id="in2" placeholder="¿Cómo fue el día?"></textarea></div>
-   <button class="bs" id="bsv" onclick="saveLog()">GUARDAR DÍA</button>
   </div>
 
   <!-- ── GYM ─────────────────────────────────────────── -->

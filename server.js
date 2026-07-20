@@ -582,6 +582,124 @@ app.post('/ia/resumen', async (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 
+// ════════════════════════════════════════════════════════
+// RESUMEN DEL DÍA (dashboard de solo lectura)
+// ════════════════════════════════════════════════════════
+app.get('/resumen/:fecha', async (req, res) => {
+  const fecha = req.params.fecha; // "YYYY-MM-DD"
+  try {
+    // ── 1. Sueño ────────────────────────────────────────
+    const { rows: logRows } = await db(
+      'SELECT sueno, notas FROM daily_logs WHERE fecha = $1', [fecha]
+    );
+    const logHoy = logRows[0] || null;
+    let sueno_horas = null;
+    let sueno_fuente = 'none';
+    const nota = logHoy?.notas || '';
+
+    if (logHoy?.sueno && parseFloat(logHoy.sueno) > 0) {
+      sueno_horas = parseFloat(logHoy.sueno);
+      sueno_fuente = 'manual';
+    } else {
+      // Intenta Strava (tipo Sleep) para esa fecha
+      const { rows: stravaS } = await db(
+        `SELECT datos_raw FROM strava_activities
+         WHERE tipo ILIKE 'Sleep' AND fecha::date = $1 LIMIT 1`, [fecha]
+      ).catch(() => ({ rows: [] }));
+      if (stravaS.length) {
+        const raw = stravaS[0].datos_raw || {};
+        sueno_horas = raw.moving_time ? +(raw.moving_time / 3600).toFixed(1) : null;
+        if (sueno_horas) sueno_fuente = 'strava';
+      }
+      // Fallback: último daily_log con sueño
+      if (!sueno_horas) {
+        const { rows: last } = await db(
+          'SELECT sueno FROM daily_logs WHERE sueno > 0 ORDER BY fecha DESC LIMIT 1'
+        ).catch(() => ({ rows: [] }));
+        if (last.length) { sueno_horas = parseFloat(last[0].sueno); sueno_fuente = 'manual'; }
+      }
+    }
+
+    // ── 2. Nutrición ─────────────────────────────────────
+    const { rows: comidas } = await db(
+      'SELECT calorias, proteinas FROM comidas WHERE fecha = $1', [fecha]
+    ).catch(() => ({ rows: [] }));
+    const calorias_consumidas = Math.round(comidas.reduce((s, c) => s + (c.calorias || 0), 0));
+    const proteinas_consumidas = Math.round(comidas.reduce((s, c) => s + parseFloat(c.proteinas || 0), 0));
+    const calorias_objetivo  = 2200;
+    const proteinas_objetivo = 160;
+
+    // ── 3. Sesión gym ────────────────────────────────────
+    const { rows: sesRows } = await db(
+      `SELECT s.completada FROM sesiones_gym s WHERE s.fecha = $1`, [fecha]
+    ).catch(() => ({ rows: [] }));
+    const sesion_gym_hoy = sesRows.length > 0 && !!sesRows[0].completada;
+
+    // ── 4. Rutina planificada ────────────────────────────
+    // Noon UTC para evitar problemas de timezone en el getDay()
+    const dDate = new Date(fecha + 'T12:00:00Z');
+    const diaLabel = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][dDate.getUTCDay()];
+    const { rows: rutinas } = await db('SELECT nombre, dias FROM rutinas').catch(() => ({ rows: [] }));
+    const rutinaHoy = rutinas.find(r => {
+      const dias = Array.isArray(r.dias) ? r.dias : (typeof r.dias === 'string' ? JSON.parse(r.dias) : []);
+      return dias.map(d => String(d).toLowerCase()).includes(diaLabel);
+    });
+    const rutina_hoy = rutinaHoy ? rutinaHoy.nombre : 'Descanso';
+
+    // ── 5. Strava actividad (no sleep) ───────────────────
+    const { rows: stravaA } = await db(
+      `SELECT id FROM strava_activities
+       WHERE tipo NOT ILIKE 'Sleep' AND fecha::date = $1 LIMIT 1`, [fecha]
+    ).catch(() => ({ rows: [] }));
+    const strava_actividad_hoy = stravaA.length > 0;
+
+    // ── 6. Proyectos activos ─────────────────────────────
+    const { rows: proyectos } = await db(
+      'SELECT nombre, progreso FROM proyectos WHERE progreso < 100 ORDER BY progreso ASC'
+    ).catch(() => ({ rows: [] }));
+    const proyectos_activos    = proyectos.length;
+    const proyecto_prioritario = proyectos[0]?.nombre || null;
+
+    // ── 7. Score de energía ──────────────────────────────
+    const sueno_score = Math.min(1, (sueno_horas || 0) / 8) * 40;
+    const nutri_ratio = calorias_objetivo > 0 ? Math.min(1, calorias_consumidas / calorias_objetivo) : 0;
+    const nutri_score = nutri_ratio * 35;
+    const act_score   = (sesion_gym_hoy || strava_actividad_hoy) ? 25 : 0;
+    const energia_score = Math.round(sueno_score + nutri_score + act_score);
+
+    res.json({
+      fecha,
+      sueno_horas,
+      sueno_fuente,
+      calorias_consumidas,
+      calorias_objetivo,
+      proteinas_consumidas,
+      proteinas_objetivo,
+      sesion_gym_hoy,
+      rutina_hoy,
+      strava_actividad_hoy,
+      energia_score,
+      nota,
+      proyectos_activos,
+      proyecto_prioritario
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /logs/:fecha/nota — actualiza solo la nota del día
+app.patch('/logs/:fecha/nota', async (req, res) => {
+  const { notas } = req.body;
+  const fecha = req.params.fecha;
+  try {
+    await db(
+      `INSERT INTO daily_logs (fecha, notas) VALUES ($1,$2)
+       ON CONFLICT (fecha) DO UPDATE SET notas=$2`,
+      [fecha, notas ?? '']
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Fallback SPA: cualquier GET no-API sirve el index ────
 app.listen(PORT, () => {
   console.log(`OkiroSport Backend v3.0 · :${PORT}`);

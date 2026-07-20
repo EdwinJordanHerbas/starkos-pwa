@@ -4,7 +4,6 @@
 const A          = '';
 const DIAS       = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 const DIAS_LABEL = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
-let tdCount = 0;
 let currentViewDate = new Date();
 const currentViewISO = () => {
   const d = currentViewDate;
@@ -16,7 +15,7 @@ const hoyISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
 
-/* ── 2. API (añade la clave de acceso a cada petición) ──────────── */
+/* ── 2. API ─────────────────────────────────────────────────────── */
 async function api(path, opts = {}) {
   const token = localStorage.getItem('okiro_token');
   opts.headers = Object.assign({}, opts.headers || {});
@@ -58,15 +57,13 @@ async function unlock() {
   if (err) err.textContent = 'Clave incorrecta';
 }
 
-/* Comprueba acceso al arrancar. Si el servidor exige clave y no la
-   tenemos, muestra la pantalla de acceso; si no, arranca normal. */
 async function checkAccess() {
   try {
     const res = await api('/auth/check');
     return res.ok;
   } catch (e) {
-    if (e.message === '401') return false; // lock ya visible
-    return true; // backend caído o dev sin mock: dejamos entrar, cada sección mostrará su error
+    if (e.message === '401') return false;
+    return true;
   }
 }
 
@@ -119,18 +116,13 @@ function typewriterEffect(el, text, speed = 30, onDone) {
 function setupOfflineIndicator() {
   const banner = document.getElementById('offline-banner');
   if (!banner) return;
-
   const update = () => {
-    if (!navigator.onLine) {
-      banner.classList.add('visible');
-    } else {
-      banner.classList.remove('visible');
-    }
+    if (!navigator.onLine) banner.classList.add('visible');
+    else banner.classList.remove('visible');
   };
-
   window.addEventListener('online',  update);
   window.addEventListener('offline', update);
-  update(); /* estado inicial */
+  update();
 }
 
 /* ── 7. NAVEGACIÓN ──────────────────────────────────────────────── */
@@ -142,15 +134,16 @@ function ss(n, btn) {
   if (sec) sec.classList.add('active');
   if (btn) btn.classList.add('active');
 
-  if (n === 'gym'       && typeof loadGym   === 'function') loadGym();
-  if (n === 'nutri'     && typeof loadNutri === 'function') loadNutri();
-  if (n === 'proyectos' && typeof loadP     === 'function') loadP();
+  if (n === 'hoy'       && typeof loadResumenDia === 'function') loadResumenDia(currentViewISO());
+  if (n === 'gym'       && typeof loadGym        === 'function') loadGym();
+  if (n === 'nutri'     && typeof loadNutri      === 'function') loadNutri();
+  if (n === 'proyectos' && typeof loadP          === 'function') loadP();
   if (n === 'log')       loadL();
 
   if (typeof window.positionNavLens === 'function') window.positionNavLens();
 }
 
-/* ── 7b. NAV DESLIZANTE (lente que sigue el dedo, estilo iOS) ────── */
+/* ── 7b. NAV DESLIZANTE ─────────────────────────────────────────── */
 function setupNav() {
   const nav  = document.getElementById('nav');
   const lens = document.getElementById('nav-lens');
@@ -201,13 +194,13 @@ function setupNav() {
   const finish = (e) => {
     if (!dragging) return;
     dragging = false;
-    nav.classList.remove('dragging');   // vuelve la transición muelle
+    nav.classList.remove('dragging');
     setHover(null);
     const btn = btnAtX(e.clientX);
     if (btn && !btn.classList.contains('active')) {
-      ss(btn.dataset.sec, btn);         // ss() reposiciona la lente
+      ss(btn.dataset.sec, btn);
     } else {
-      window.positionNavLens();         // asienta la lente en el activo
+      window.positionNavLens();
     }
   };
   nav.addEventListener('pointerup', finish);
@@ -222,52 +215,19 @@ function setupNav() {
   requestAnimationFrame(() => window.positionNavLens());
 }
 
-/* ── 7c. BLOQUEAR ZOOM (pinch) — comportamiento de app ──────────── */
-/* El doble-tap-zoom lo mata `touch-action: manipulation` (CSS, en body),
-   y el zoom por pellizco lo bloquean estos gestos + user-scalable=no. */
+/* ── 7c. BLOQUEAR ZOOM ──────────────────────────────────────────── */
 function blockZoom() {
   ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev =>
     document.addEventListener(ev, (e) => e.preventDefault(), { passive: false })
   );
 }
 
-/* ── 8. CONTADOR DE TAREAS ──────────────────────────────────────── */
-function ct(d) {
-  tdCount = Math.max(0, Math.min(5, tdCount + d));
-  updateTaskUI();
-  renderTaskDots();
-}
-
-function updateTaskUI() {
-  const tdEl   = document.getElementById('td');
-  const numEl  = document.getElementById('td-num');
-  const fillEl = document.getElementById('td-fill');
-  if (tdEl)   tdEl.textContent   = tdCount;
-  if (numEl)  numEl.textContent  = `${tdCount} / 5 TAREAS`;
-  if (fillEl) fillEl.style.width = `${(tdCount / 5) * 100}%`;
-}
-
-function renderTaskDots() {
-  const dots = document.querySelectorAll('.task-dot');
-  dots.forEach((dot, idx) => {
-    dot.classList.toggle('active', idx < tdCount);
-  });
-}
-
-function toggleTaskDot(i) {
-  /* Si toco el último activo: lo desactivo (baja uno). Si toco cualquier otro: activo hasta ahí. */
-  tdCount = (i === tdCount) ? i - 1 : i;
-  tdCount = Math.max(0, Math.min(5, tdCount));
-  updateTaskUI();
-  renderTaskDots();
-}
-
-/* ── 8b. NAVEGADOR DE FECHA (HOY) ───────────────────────────────── */
+/* ── 8. NAVEGADOR DE FECHA (HOY) ────────────────────────────────── */
 function navigateDay(delta) {
   currentViewDate = new Date(currentViewDate);
   currentViewDate.setDate(currentViewDate.getDate() + delta);
   updateDateNavUI();
-  loadDayLogByDate(currentViewISO());
+  loadResumenDia(currentViewISO());
 }
 
 function updateDateNavUI() {
@@ -288,127 +248,148 @@ function updateDateNavUI() {
     badgeEl.textContent = isToday ? 'HOY' : (viewStr < todayStr ? 'PASADO' : 'FUTURO');
     badgeEl.className   = 'date-nav-badge' + (isToday ? ' today' : '');
   }
-
-  const bsv = document.getElementById('bsv');
-  if (bsv && !bsv.disabled) {
-    bsv.textContent = isToday ? 'GUARDAR DÍA' : `GUARDAR ${dd} ${mes}`;
-  }
 }
 
-async function loadDayLogByDate(dateStr) {
-  try {
-    const res  = await api('/logs');
-    const logs = res.ok ? await res.json() : [];
-    resetHoyForm();
-    const log = Array.isArray(logs)
-      ? logs.find(l => l.fecha && String(l.fecha).startsWith(dateStr))
-      : null;
-    if (log) aplicarLogHoy(log);
-  } catch {}
-}
+/* ── 9. HOY — DASHBOARD DE SOLO LECTURA ────────────────────────── */
 
-function resetHoyForm() {
-  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-  set('is',  7.5);
-  set('ie',  7);
-  set('in',  7);
-  set('itt', 'gym');
-  set('in2', '');
-  const iet = document.getElementById('iet');
-  if (iet) iet.checked = false;
-  const ev = document.getElementById('ev');
-  const nv = document.getElementById('nv');
-  if (ev) ev.textContent = '7';
-  if (nv) nv.textContent = '7';
-  tdCount = 0;
-  updateTaskUI();
-  renderTaskDots();
-}
+async function loadResumenDia(fecha) {
+  const ringEl  = document.getElementById('hoy-energy-ring');
+  const checkEl = document.getElementById('hoy-checklist');
+  const notaEl  = document.getElementById('nota-dia');
 
-/* ── 9. PREFILL: carga el log de hoy en el formulario ───────────── */
-function aplicarLogHoy(log) {
-  const set = (id, v) => { const el = document.getElementById(id); if (el && v !== null && v !== undefined) el.value = v; };
-  set('is',  log.sueno);
-  set('ie',  log.energia);
-  set('in',  log.nutricion);
-  set('itt', log.tipo_entreno || 'gym');
-  set('in2', log.notas || '');
-
-  const ev = document.getElementById('ev');
-  const nv = document.getElementById('nv');
-  if (ev && log.energia   != null) ev.textContent = log.energia;
-  if (nv && log.nutricion != null) nv.textContent = log.nutricion;
-
-  const iet = document.getElementById('iet');
-  if (iet) iet.checked = !!log.entreno_completado;
-
-  tdCount = parseInt(log.tareas_completadas) || 0;
-  updateTaskUI();
-  renderTaskDots();
-}
-
-/* ── 10. GUARDAR DÍA ────────────────────────────────────────────── */
-async function saveLog() {
-  const isEl  = document.getElementById('is');
-  const ieEl  = document.getElementById('ie');
-  const ietEl = document.getElementById('iet');
-  const ittEl = document.getElementById('itt');
-  const inEl  = document.getElementById('in');
-  const in2El = document.getElementById('in2');
-  const bsv   = document.getElementById('bsv');
-
-  const payload = {
-    fecha:               currentViewISO(),
-    sueno:               parseFloat(isEl?.value)    || 0,
-    energia:             parseInt(ieEl?.value)       || 0,
-    entreno_completado:  ietEl?.checked              || false,
-    tipo_entreno:        ittEl?.value?.trim()         || '',
-    nutricion:           parseInt(inEl?.value)        || 0,
-    tareas_completadas:  tdCount,
-    tareas_total:        5,
-    notas:               in2El?.value?.trim()         || ''
-  };
-
-  if (bsv) { bsv.disabled = true; bsv.textContent = 'GUARDANDO...'; }
+  if (ringEl)  ringEl.innerHTML  = '<div class="hoy-loading">Cargando...</div>';
+  if (checkEl) checkEl.innerHTML = '';
 
   try {
-    const res = await api('/logs', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload)
-    });
+    const res = await api('/resumen/' + fecha);
     if (!res.ok) throw new Error(res.status);
+    const d = await res.json();
 
-    if (bsv) {
-      bsv.textContent = '✓ GUARDADO';
-      bsv.style.background = 'var(--success)';
-      bsv.style.color      = '#000';
-    }
-    toast('Día guardado');
-    setTimeout(() => {
-      if (bsv) {
-        bsv.disabled         = false;
-        bsv.textContent      = 'GUARDAR DÍA';
-        bsv.style.background = '';
-        bsv.style.color      = '';
-      }
-    }, 2000);
+    renderEnergyRing(d);
+    renderChecklist(d);
+    renderStreakInfo();
 
-    const logsRes = await api('/logs');
-    const logs    = logsRes.ok ? await logsRes.json() : [];
-    updateStreakBar(logs);
-    updatePlayer(logs);
+    if (notaEl) notaEl.value = d.nota || '';
 
   } catch {
-    if (bsv) {
-      bsv.disabled    = false;
-      bsv.textContent = 'ERROR — REINTENTAR';
-    }
-    toast('No se pudo guardar', 'error');
+    if (ringEl) ringEl.innerHTML = '<div class="hoy-loading">Sin datos para este día</div>';
   }
 }
 
-/* ── 11. HISTORIAL — cargar ─────────────────────────────────────── */
+function renderEnergyRing(d) {
+  const el = document.getElementById('hoy-energy-ring');
+  if (!el) return;
+
+  const score = d.energia_score || 0;
+  const color = score >= 85 ? '#00D9FF'
+              : score >= 65 ? '#34D399'
+              : score >= 40 ? '#FBBF24'
+              :               '#F87171';
+  const label = score >= 85 ? 'En forma'
+              : score >= 65 ? 'Bueno'
+              : score >= 40 ? 'Regular'
+              :               'Agotado';
+
+  const r     = 52;
+  const circ  = +(2 * Math.PI * r).toFixed(1);
+  const dash  = +((score / 100) * circ).toFixed(1);
+  const offset = +((circ * 0.25)).toFixed(1);
+
+  el.innerHTML = `
+    <div class="ring-wrap">
+      <svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Score de energía: ${score}">
+        <circle cx="60" cy="60" r="${r}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/>
+        <circle cx="60" cy="60" r="${r}" fill="none" stroke="${color}" stroke-width="10"
+          stroke-dasharray="${dash} ${circ}"
+          stroke-dashoffset="${offset}"
+          stroke-linecap="round"
+          style="filter:drop-shadow(0 0 8px ${color}88);transition:stroke-dasharray 0.8s ease"/>
+        <text x="60" y="57" text-anchor="middle" fill="${color}"
+          font-family="Inter,sans-serif" font-size="24" font-weight="700">${score}</text>
+        <text x="60" y="72" text-anchor="middle" fill="rgba(255,255,255,0.35)"
+          font-family="Inter,sans-serif" font-size="8" letter-spacing="1">ENERGÍA</text>
+      </svg>
+      <div class="ring-label" style="color:${color}">${label.toUpperCase()}</div>
+    </div>`;
+}
+
+function renderChecklist(d) {
+  const el = document.getElementById('hoy-checklist');
+  if (!el) return;
+
+  /* Entrenamiento */
+  const gymDone  = d.sesion_gym_hoy;
+  const gymClass = gymDone ? 'done' : 'warning';
+
+  /* Nutrición */
+  const nutriRatio = d.calorias_objetivo > 0
+    ? d.calorias_consumidas / d.calorias_objetivo : 0;
+  const nutriDone  = nutriRatio >= 0.8;
+  const nutriClass = nutriDone ? 'done' : 'warning';
+  const pctNutri   = Math.min(100, Math.round(nutriRatio * 100));
+
+  /* Sueño */
+  const sueno      = d.sueno_horas || 0;
+  const suenoClass = sueno >= 7 ? 'done' : sueno >= 5 ? 'warning' : 'danger';
+  const suenoIcon  = sueno >= 7 ? '✓' : sueno >= 5 ? '⚠' : '✗';
+  const suenoSub   = sueno > 0
+    ? `${sueno}h${d.sueno_fuente !== 'strava' && d.fecha !== hoyISO() ? ' · último registrado' : ''}`
+    : 'Sin datos';
+
+  /* Proyectos */
+  const projClass = d.proyectos_activos === 0 ? 'done' : 'warning';
+  const projSub   = d.proyectos_activos > 0
+    ? `${d.proyectos_activos} activo${d.proyectos_activos !== 1 ? 's' : ''}${d.proyecto_prioritario ? ' · ' + d.proyecto_prioritario : ''}`
+    : 'Todo completado';
+
+  el.innerHTML = `
+    <div class="hoy-check-card ${gymClass}">
+      <div class="hoy-card-icon">💪</div>
+      <div class="hoy-card-body">
+        <div class="hoy-card-title">Entrenamiento</div>
+        <div class="hoy-card-sub">${d.rutina_hoy || 'Descanso'}</div>
+      </div>
+      <div class="hoy-card-status">${gymDone ? '✓' : '○'}</div>
+    </div>
+    <div class="hoy-check-card ${nutriClass}">
+      <div class="hoy-card-icon">🥗</div>
+      <div class="hoy-card-body">
+        <div class="hoy-card-title">Nutrición</div>
+        <div class="hoy-card-sub">${d.proteinas_consumidas}g prot · ${d.calorias_consumidas} kcal</div>
+        <div class="hoy-nutri-bar"><div class="hoy-nutri-fill" style="width:${pctNutri}%"></div></div>
+      </div>
+      <div class="hoy-card-status">${pctNutri}%</div>
+    </div>
+    <div class="hoy-check-card ${suenoClass}">
+      <div class="hoy-card-icon">😴</div>
+      <div class="hoy-card-body">
+        <div class="hoy-card-title">Sueño</div>
+        <div class="hoy-card-sub">${suenoSub}</div>
+      </div>
+      <div class="hoy-card-status">${suenoIcon}</div>
+    </div>
+    <div class="hoy-check-card ${projClass}">
+      <div class="hoy-card-icon">📋</div>
+      <div class="hoy-card-body">
+        <div class="hoy-card-title">Proyectos</div>
+        <div class="hoy-card-sub">${projSub}</div>
+      </div>
+      <div class="hoy-card-status">${d.proyectos_activos}</div>
+    </div>`;
+}
+
+function renderStreakInfo() {
+  const el = document.getElementById('hoy-streak-info');
+  if (!el) return;
+  const lvl = localStorage.getItem('okiro_lvl') || '1';
+  const xp  = parseInt(localStorage.getItem('okiro_xp') || '0', 10);
+  el.innerHTML = `
+    <span class="hoy-streak-fire">🔥</span>
+    <span>LVL ${lvl}</span>
+    <span class="hoy-streak-xp">${xp.toLocaleString('es')} XP</span>`;
+}
+
+/* ── 10. HISTORIAL — cargar ─────────────────────────────────────── */
 async function loadL() {
   const hl = document.getElementById('hl');
   if (!hl) return;
@@ -422,7 +403,7 @@ async function loadL() {
     updatePlayer(logs);
 
     if (!Array.isArray(logs) || !logs.length) {
-      hl.innerHTML = '<div class="empty-state">Sin registros todavía. Guarda tu primer día en HOY.</div>';
+      hl.innerHTML = '<div class="empty-state">Sin registros todavía.</div>';
       return;
     }
 
@@ -449,9 +430,7 @@ async function loadL() {
   }
 }
 
-/* ── 12. NIVEL + XP (HUD del jugador, estilo "System") ──────────── */
-
-/* XP de un día según lo cumplido */
+/* ── 11. NIVEL + XP ─────────────────────────────────────────────── */
 function dayXP(l) {
   let xp = 0;
   if (l.entreno_completado) xp += 40;
@@ -464,7 +443,6 @@ function dayXP(l) {
   return xp;
 }
 
-/* Rango según nivel (D → S) */
 function rankForLevel(lvl) {
   if (lvl >= 26) return ['S', 'rank-s'];
   if (lvl >= 17) return ['A', 'rank-a'];
@@ -475,13 +453,10 @@ function rankForLevel(lvl) {
 
 function updatePlayer(logs) {
   const windowed = Array.isArray(logs) ? logs.reduce((a, l) => a + dayXP(l), 0) : 0;
-
-  /* XP monotónica: nunca baja aunque un día salga de la ventana de 30 */
-  const prev = parseInt(localStorage.getItem('okiro_xp') || '0', 10) || 0;
-  const totalXP = Math.max(prev, windowed);
+  const prev     = parseInt(localStorage.getItem('okiro_xp') || '0', 10) || 0;
+  const totalXP  = Math.max(prev, windowed);
   localStorage.setItem('okiro_xp', String(totalXP));
 
-  /* Curva: nivel L→L+1 requiere 80 + (L-1)·40 XP */
   let lvl = 1, rem = totalXP, need = 80;
   while (rem >= need) { rem -= need; lvl++; need = 80 + (lvl - 1) * 40; }
 
@@ -500,30 +475,28 @@ function updatePlayer(logs) {
     chip.className    = 'rank-badge ' + cls;
   }
 
-  /* Aviso de subida de nivel */
   if (prevLvl && lvl > prevLvl && typeof toast === 'function') {
     toast(`⬆ NIVEL ${lvl} — RANGO ${rankForLevel(lvl)[0]}`, 'ok');
   }
   localStorage.setItem('okiro_lvl', String(lvl));
+
+  /* Actualiza la línea HOY después de que el player esté computado */
+  renderStreakInfo();
 }
 
-/* ── 13. STREAK BAR ─────────────────────────────────────────────── */
+/* ── 12. STREAK BAR ─────────────────────────────────────────────── */
 function updateStreakBar(logs) {
   const days = document.querySelectorAll('.streak-day');
   if (!days.length) return;
 
-  /* data-day usa L M X J V S D (lunes=L … domingo=D) */
   const dayMap = { L: 1, M: 2, X: 3, J: 4, V: 5, S: 6, D: 0 };
-
-  const today   = new Date();
-  const todayDow = today.getDay(); /* 0=dom */
+  const today    = new Date();
+  const todayDow = today.getDay();
 
   const done = new Set();
   if (Array.isArray(logs)) {
     logs.forEach(l => {
-      if (l.entreno_completado) {
-        done.add(new Date(l.fecha).toDateString());
-      }
+      if (l.entreno_completado) done.add(new Date(l.fecha).toDateString());
     });
   }
 
@@ -532,15 +505,14 @@ function updateStreakBar(logs) {
     const dow  = dayMap[key];
     if (dow === undefined) return;
 
-    /* Fecha de ese día en la semana actual (lun–dom), siempre hacia atrás */
     let diff = dow - todayDow;
-    if (dow === 0 && todayDow !== 0) diff = 7 - todayDow; /* domingo al final */
+    if (dow === 0 && todayDow !== 0) diff = 7 - todayDow;
     else if (diff > 0) diff -= 7;
     const date = new Date(today);
     date.setDate(today.getDate() + diff);
 
-    const isToday = date.toDateString() === today.toDateString();
-    const isDone  = done.has(date.toDateString());
+    const isToday  = date.toDateString() === today.toDateString();
+    const isDone   = done.has(date.toDateString());
     const isFuture = date > today;
 
     el.classList.toggle('done',  isDone && !isFuture);
@@ -548,7 +520,7 @@ function updateStreakBar(logs) {
   });
 }
 
-/* ── 14. CERRAR MODAL ───────────────────────────────────────────── */
+/* ── 13. CERRAR MODAL ───────────────────────────────────────────── */
 function closeMissionModal() {
   const modal   = document.getElementById('mission-modal');
   const overlay = document.getElementById('mission-overlay');
@@ -559,7 +531,7 @@ function closeMissionModal() {
   }, 300);
 }
 
-/* ── 15. MODAL DE MISIÓN DIARIA ─────────────────────────────────── */
+/* ── 14. MODAL DE MISIÓN DIARIA ─────────────────────────────────── */
 async function showMissionModal() {
   const todayStr = hoyISO();
   if (localStorage.getItem('missionShown') === todayStr) return;
@@ -572,9 +544,7 @@ async function showMissionModal() {
   if (!overlay) return;
   overlay.style.display = 'flex';
 
-  if (typerEl) {
-    typewriterEffect(typerEl, 'SISTEMA DE MISIONES ACTIVADO', 35);
-  }
+  if (typerEl) typewriterEffect(typerEl, 'SISTEMA DE MISIONES ACTIVADO', 35);
 
   try {
     const [rutiRes, logRes] = await Promise.all([
@@ -592,13 +562,12 @@ async function showMissionModal() {
       Array.isArray(r.dias) && r.dias.map(d => d.toLowerCase()).includes(diaLabel)
     );
 
-    const ayer      = new Date();
+    const ayer    = new Date();
     ayer.setDate(ayer.getDate() - 1);
-    const ayerStr   = ayer.toISOString().split('T')[0];
-    const logAyer   = logs.find(l => l.fecha && String(l.fecha).startsWith(ayerStr));
+    const ayerStr = ayer.toISOString().split('T')[0];
+    const logAyer = logs.find(l => l.fecha && String(l.fecha).startsWith(ayerStr));
 
     let html = '';
-
     if (rutHoy) {
       html += `<p style="margin-bottom:8px">
         <span style="color:var(--text-3);font-size:10px">RUTINA HOY</span><br>
@@ -610,7 +579,7 @@ async function showMissionModal() {
 
     if (logAyer) {
       html += `<p style="font-size:11px;color:var(--text-3);margin-top:8px">
-        AYER — 💤${logAyer.sueno || '?'}h · ⚡${logAyer.energia || '?'} ·
+        AYER — 💤${logAyer.sueno || '?'}h ·
         ${logAyer.entreno_completado ? '🏋️ ENTRENO ✓' : '🛌 DESCANSO'}
       </p>`;
     }
@@ -623,30 +592,47 @@ async function showMissionModal() {
   }
 
   localStorage.setItem('missionShown', todayStr);
-
   if (acceptEl) acceptEl.onclick = closeMissionModal;
 }
 
-/* ── 16. CARGA INICIAL DE DATOS ─────────────────────────────────── */
+/* ── 15. CARGA INICIAL DE DATOS ─────────────────────────────────── */
 async function initData() {
-  /* Init navegador de fecha */
   currentViewDate = new Date();
   updateDateNavUI();
 
-  /* Prefill de HOY + racha + día */
+  /* Racha + XP global */
   try {
     const res  = await api('/logs');
     const logs = res.ok ? await res.json() : [];
     updateStreakBar(logs);
     updatePlayer(logs);
-    const log = Array.isArray(logs)
-      ? logs.find(l => l.fecha && String(l.fecha).startsWith(hoyISO()) || (l.fecha?.toISOString?.() || '').startsWith(hoyISO()))
-      : null;
-    if (log) aplicarLogHoy(log);
   } catch {}
+
+  /* Dashboard de HOY */
+  loadResumenDia(hoyISO());
 
   /* Modal de misión */
   setTimeout(showMissionModal, 800);
+}
+
+/* ── 16. DEBOUNCE NOTA DEL DÍA ──────────────────────────────────── */
+let _notaTimer = null;
+function setupNotaDebounce() {
+  const notaEl = document.getElementById('nota-dia');
+  if (!notaEl) return;
+  notaEl.addEventListener('input', () => {
+    clearTimeout(_notaTimer);
+    _notaTimer = setTimeout(async () => {
+      const fecha = currentViewISO();
+      try {
+        await api('/logs/' + fecha + '/nota', {
+          method:  'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ notas: notaEl.value })
+        });
+      } catch {}
+    }, 1200);
+  });
 }
 
 /* ── 17. INIT ───────────────────────────────────────────────────── */
@@ -654,18 +640,6 @@ window.onload = async () => {
   /* Reloj */
   updateClock();
   setInterval(updateClock, 1000);
-
-  /* Espejos de sliders */
-  const ieEl = document.getElementById('ie');
-  const evEl = document.getElementById('ev');
-  if (ieEl && evEl) {
-    ieEl.addEventListener('input', () => { evEl.textContent = ieEl.value; });
-  }
-  const inEl = document.getElementById('in');
-  const nvEl = document.getElementById('nv');
-  if (inEl && nvEl) {
-    inEl.addEventListener('input', () => { nvEl.textContent = inEl.value; });
-  }
 
   /* Enter en la pantalla de acceso */
   const lockInput = document.getElementById('lock-input');
@@ -686,7 +660,7 @@ window.onload = async () => {
   /* Sección inicial */
   ss('hoy', document.querySelector('.nb'));
 
-  /* Fecha inicial del navegador HOY (antes de que lleguen datos del servidor) */
+  /* Fecha inicial */
   updateDateNavUI();
 
   /* Nav deslizante + bloqueo de zoom */
@@ -696,14 +670,16 @@ window.onload = async () => {
   /* Indicador de conexión */
   setupOfflineIndicator();
 
+  /* Nota del día con debounce */
+  setupNotaDebounce();
+
   /* Acceso + datos */
   const ok = await checkAccess();
   if (ok) initData();
 
-  /* Service worker (PWA offline + instalable + auto-actualización) */
+  /* Service Worker */
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     let refreshing = false;
-    /* Cuando una versión nueva toma el control, recarga sola (1 vez) */
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (refreshing) return;
       refreshing = true;

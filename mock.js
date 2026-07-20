@@ -214,6 +214,33 @@
       return mockOk({ ok: true });
     }
 
+    // PATCH /logs/:fecha/nota — simula guardar solo la nota
+    if (/\/logs\/\d{4}-\d{2}-\d{2}\/nota$/.test(u) && opts?.method === 'PATCH') {
+      return mockOk({ ok: true });
+    }
+
+    // GET /resumen/:fecha — dashboard de solo lectura
+    if (/\/resumen\/\d{4}-\d{2}-\d{2}$/.test(u)) {
+      const fechaParam = (u.match(/\/resumen\/(\d{4}-\d{2}-\d{2})/) || [])[1] || HOY;
+      const isHoy = fechaParam === HOY;
+      return mockOk({
+        fecha: fechaParam,
+        sueno_horas: 7.5,
+        sueno_fuente: 'manual',
+        calorias_consumidas: 1840,
+        calorias_objetivo: 2200,
+        proteinas_consumidas: 152,
+        proteinas_objetivo: 160,
+        sesion_gym_hoy: isHoy,
+        rutina_hoy: 'PUSH',
+        strava_actividad_hoy: false,
+        energia_score: 78,
+        nota: isHoy ? 'Buen entreno. Press banca 90kg.' : '',
+        proyectos_activos: 2,
+        proyecto_prioritario: 'Agencia IA Freelance'
+      });
+    }
+
     // Cualquier otra ruta (Anthropic API, Strava, etc.) → pasa al fetch real
     return _fetch(url, opts);
   };
