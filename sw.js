@@ -26,7 +26,8 @@ const PRECACHE = [
 
 // Rutas de API — nunca pasan por caché
 const API_PREFIXES = ['/logs', '/proyectos', '/rutinas', '/ejercicios', '/sesiones',
-                      '/nutricion', '/strava', '/notion', '/ia', '/auth', '/health'];
+                      '/nutricion', '/strava', '/notion', '/ia', '/auth', '/health',
+                      '/resumen'];   // faltaba: se cacheaba el dashboard de HOY como si fuera estático
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

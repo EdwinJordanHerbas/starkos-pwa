@@ -22,13 +22,18 @@ cp "$SRC/server.js" /opt/backend/server.js
 
 echo ">> Frontend (/opt/pwa)"
 cp "$SRC/index.html" "$SRC/manifest.json" "$SRC/sw.js" "$SRC/mock.js" /opt/pwa/
-rm -rf /opt/pwa/src /opt/pwa/icons
-cp -r "$SRC/src" /opt/pwa/src
-cp -r "$SRC/icons" /opt/pwa/icons
+rm -rf /opt/pwa/src /opt/pwa/icons /opt/pwa/assets
+cp -r "$SRC/src"    /opt/pwa/src
+cp -r "$SRC/icons"  /opt/pwa/icons
+cp -r "$SRC/assets" /opt/pwa/assets
 
-echo ">> nginx: asegurar rutas /ia y /auth hacia el backend"
+echo ">> nginx: asegurar rutas /ia, /auth y /resumen hacia el backend"
 if ! grep -q '|ia|auth)' "$NGINX_SITE"; then
   sed -i 's#|strava|notion)#|strava|notion|ia|auth)#' "$NGINX_SITE"
+fi
+# /resumen faltaba: el dashboard de HOY devolvia 404 de nginx en produccion
+if ! grep -q 'resumen' "$NGINX_SITE"; then
+  sed -i 's#|ia|auth)#|ia|auth|resumen)#' "$NGINX_SITE"
 fi
 nginx -t && systemctl reload nginx
 
