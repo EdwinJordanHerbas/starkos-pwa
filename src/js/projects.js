@@ -1,4 +1,4 @@
-// OkiroSport — Lógica de Proyectos
+﻿// OkiroSport — Lógica de Proyectos
 
 /* ── ESTADO ─────────────────────────────────────────────────────── */
 let _editProjId = null;
@@ -53,7 +53,7 @@ async function loadP() {
     <span class="rank-badge ${cls}">${label}</span>
     <button class="proj-del-btn" data-id="${p.id}" data-nombre="${nombreEsc}"
             onclick="deleteP(+this.dataset.id, this.dataset.nombre)"
-            title="Eliminar proyecto">✕</button>
+            title="Eliminar proyecto">${OKICON.cross}</button>
   </div>
   <div class="pp">${p.nombre || ''}</div>
   <div class="po">${p.objetivo || ''}</div>

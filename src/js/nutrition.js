@@ -1,4 +1,4 @@
-// OkiroSport — Lógica de Nutrición
+﻿// OkiroSport — Lógica de Nutrición
 
 /* ── 1. OBJETIVOS (editables, se guardan en el dispositivo) ─────── */
 const MACRO_DEFAULTS = { proteinas: 180, carbos: 300, grasas: 70, calorias: 2400 };
@@ -79,7 +79,7 @@ function renderMeals(comidas) {
         <span class="meal-name">${c.nombre || ''}</span>
         <span class="meal-macros">${Math.round(c.calorias || 0)} kcal · ${Math.round(c.proteinas || 0)}g P · ${Math.round(c.carbos || 0)}g C · ${Math.round(c.grasas || 0)}g G</span>
       </div>
-      <button class="meal-del" onclick="borrarComida(${c.id})" aria-label="Eliminar comida">✕</button>
+      <button class="meal-del" onclick="borrarComida(${c.id})" aria-label="Eliminar comida">${OKICON.cross}</button>
     </div>`
   ).join('');
 }

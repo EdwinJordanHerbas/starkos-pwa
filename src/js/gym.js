@@ -1,4 +1,4 @@
-// OkiroSport — Lógica de Gym y Entrenamientos (v2 Enhanced)
+﻿// OkiroSport — Lógica de Gym y Entrenamientos (v2 Enhanced)
 
 /* ── ESTADO ─────────────────────────────────────────────────────── */
 let gymRutinas        = [];
@@ -102,7 +102,7 @@ function dsSteps(ex) {
 function gymGifError(img, nombre) {
   if (img.parentElement) {
     img.parentElement.innerHTML =
-      `<div class="tech-gif-err">🏋️<br><small>${nombre}</small></div>`;
+      `<div class="tech-gif-err">${OKICON.dumbbell}<br><small>${nombre}</small></div>`;
   }
 }
 
@@ -200,7 +200,7 @@ function renderRutinaSelect() {
   renderGymObjectives();
 }
 
-const GYM_ICONS = { 'PUSH': '💪', 'PULL': '🔄', 'LEGS': '🦵' };
+const GYM_ICONS = { 'PUSH': OKICON.dumbbell, 'PULL': OKICON.pull, 'LEGS': OKICON.legs };
 const GYM_BANNERS = { 'PUSH': 'assets/gym-push.png', 'PULL': 'assets/gym-pull.png', 'LEGS': 'assets/gym-legs.png' };
 
 async function renderGymObjectives() {
@@ -228,7 +228,7 @@ async function renderGymObjectives() {
       const monthlyGoal = Math.max(4, Math.round(weeklyGoal * 4.3));
       const done        = countMap[r.id] || 0;
       const pct         = Math.min(100, Math.round((done / monthlyGoal) * 100));
-      const icon        = GYM_ICONS[(r.nombre || '').toUpperCase()] || '🏋️';
+      const icon        = GYM_ICONS[(r.nombre || '').toUpperCase()] || OKICON.dumbbell;
 
       return `
         <div class="gym-obj-card">
@@ -283,7 +283,7 @@ async function iniciarSesion(rutina_id) {
     gymSeriesMap = {};
     gymOpenForm  = null;
     renderGym();
-    toast('Sesión iniciada — a por ello 💪');
+    toast('Sesión iniciada.');
 
     /* Pre-cargar dataset en background */
     loadGymDataset();
@@ -328,7 +328,7 @@ function renderEjercicioCard(e) {
       <span class="set-num">${i + 1}</span>
       <span class="set-val">${s.peso} kg</span>
       <span class="set-val">${s.reps} reps</span>
-      <span class="set-chk">✓</span>
+      <span class="set-chk">${OKICON.check}</span>
     </div>`
   ).join('');
 
@@ -400,7 +400,7 @@ async function injectTechniqueContent(ejId, nombreES) {
   if (!ex) {
     detail.innerHTML = `
       <div class="tech-placeholder">
-        <div class="tech-placeholder-icon">🏋️</div>
+        <div class="tech-placeholder-icon">${OKICON.dumbbell}</div>
         <div class="tech-placeholder-text">${nombreES}</div>
       </div>`;
     return;
@@ -417,7 +417,7 @@ async function injectTechniqueContent(ejId, nombreES) {
 
   const instrHTML = steps.length
     ? `<button class="tech-instr-btn" id="tech-instr-btn-${ejId}"
-               onclick="toggleTechInstr(${ejId})">📋 VER INSTRUCCIONES</button>
+               onclick="toggleTechInstr(${ejId})">VER INSTRUCCIONES</button>
        <ol class="tech-instructions" id="tech-instr-${ejId}" style="display:none">
          ${steps.map(s => `<li>${s}</li>`).join('')}
        </ol>`
@@ -446,7 +446,7 @@ function toggleTechInstr(ejId) {
   if (!el) return;
   const open = el.style.display !== 'none';
   el.style.display = open ? 'none' : 'block';
-  if (btn) btn.textContent = open ? '📋 VER INSTRUCCIONES' : '📋 OCULTAR INSTRUCCIONES';
+  if (btn) btn.textContent = open ? 'VER INSTRUCCIONES' : 'OCULTAR INSTRUCCIONES';
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -514,7 +514,7 @@ async function guardarSerie(ejId) {
             <span class="set-num">${i + 1}</span>
             <span class="set-val">${s.peso} kg</span>
             <span class="set-val">${s.reps} reps</span>
-            <span class="set-chk">✓</span>
+            <span class="set-chk">${OKICON.check}</span>
           </div>`
         ).join('');
       }
@@ -522,7 +522,7 @@ async function guardarSerie(ejId) {
       if (formEl) formEl.style.display = 'none';
     }
 
-    toast(`Serie ${serie_num} guardada ✓`);
+    toast(`Serie ${serie_num} guardada.`);
   } catch {
     toast('Error al guardar serie', 'error');
   }
@@ -547,7 +547,7 @@ async function completarSesion() {
     if (iet) iet.checked = true;
 
     renderGym();
-    toast('Dungeon cleared 🏆');
+    toast('DUNGEON CLEARED. Sesión completa.');
   } catch {
     toast('Error al completar sesión', 'error');
   }

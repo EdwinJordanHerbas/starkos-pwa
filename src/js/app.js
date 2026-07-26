@@ -15,6 +15,25 @@ const hoyISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
 
+/* ── ICONOS DE MARCA (SVG en línea, sin emojis) ─────────────────────
+   Trazos finos en currentColor: heredan el color del contexto y se ven
+   nítidos a cualquier tamaño, cosa que un emoji o un PNG no hacen. */
+const _ok = (paths) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+const OKICON = {
+  dumbbell: _ok('<path d="M6.5 6.5v11M3.5 9v6M17.5 6.5v11M20.5 9v6M6.5 12h11"/>'),
+  bowl:     _ok('<path d="M4 13h16a8 8 0 0 1-16 0Z"/><path d="M9 8c0-1.5 1-2 1-3.5M14 8c0-1.5 1-2 1-3.5"/>'),
+  moon:     _ok('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>'),
+  folder:   _ok('<path d="M3 8a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>'),
+  pull:     _ok('<path d="M4 5h16M8 5v6a4 4 0 0 0 8 0V5"/>'),
+  legs:     _ok('<path d="M5 6h14M9 6v5l-2.5 7M15 6v5l2.5 7"/>'),
+  check:    _ok('<path d="M4 12.5 9 17.5 20 6.5"/>'),
+  cross:    _ok('<path d="M6 6l12 12M18 6L6 18"/>'),
+  circle:   _ok('<circle cx="12" cy="12" r="7"/>'),
+  alert:    _ok('<path d="M12 7v6M12 17h.01"/><circle cx="12" cy="12" r="9"/>'),
+  gear:     _ok('<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.6 7.5l1.7 1M17.7 15.5l1.7 1M4.6 16.5l1.7-1M17.7 8.5l1.7-1"/>')
+};
+
 /* ── 2. API ─────────────────────────────────────────────────────── */
 async function api(path, opts = {}) {
   const token = localStorage.getItem('okiro_token');
@@ -332,7 +351,7 @@ function renderChecklist(d) {
   /* Sueño */
   const sueno      = d.sueno_horas || 0;
   const suenoClass = sueno >= 7 ? 'done' : sueno >= 5 ? 'warning' : 'danger';
-  const suenoIcon  = sueno >= 7 ? '✓' : sueno >= 5 ? '⚠' : '✗';
+  const suenoIcon  = sueno >= 7 ? OKICON.check : sueno >= 5 ? OKICON.alert : OKICON.cross;
   const suenoSub   = sueno > 0
     ? `${sueno}h${d.sueno_fuente !== 'strava' && d.fecha !== hoyISO() ? ' · último registrado' : ''}`
     : 'Sin datos';
@@ -345,15 +364,15 @@ function renderChecklist(d) {
 
   el.innerHTML = `
     <div class="hoy-check-card ${gymClass}">
-      <div class="hoy-card-icon">💪</div>
+      <div class="hoy-card-icon">${OKICON.dumbbell}</div>
       <div class="hoy-card-body">
         <div class="hoy-card-title">Entrenamiento</div>
         <div class="hoy-card-sub">${d.rutina_hoy || 'Descanso'}</div>
       </div>
-      <div class="hoy-card-status">${gymDone ? '✓' : '○'}</div>
+      <div class="hoy-card-status">${gymDone ? OKICON.check : OKICON.circle}</div>
     </div>
     <div class="hoy-check-card ${nutriClass}">
-      <div class="hoy-card-icon">🥗</div>
+      <div class="hoy-card-icon">${OKICON.bowl}</div>
       <div class="hoy-card-body">
         <div class="hoy-card-title">Nutrición</div>
         <div class="hoy-card-sub">${d.proteinas_consumidas}g prot · ${d.calorias_consumidas} kcal</div>
@@ -362,7 +381,7 @@ function renderChecklist(d) {
       <div class="hoy-card-status">${pctNutri}%</div>
     </div>
     <div class="hoy-check-card ${suenoClass}">
-      <div class="hoy-card-icon">😴</div>
+      <div class="hoy-card-icon">${OKICON.moon}</div>
       <div class="hoy-card-body">
         <div class="hoy-card-title">Sueño</div>
         <div class="hoy-card-sub">${suenoSub}</div>
@@ -370,7 +389,7 @@ function renderChecklist(d) {
       <div class="hoy-card-status">${suenoIcon}</div>
     </div>
     <div class="hoy-check-card ${projClass}">
-      <div class="hoy-card-icon">📋</div>
+      <div class="hoy-card-icon">${OKICON.folder}</div>
       <div class="hoy-card-body">
         <div class="hoy-card-title">Proyectos</div>
         <div class="hoy-card-sub">${projSub}</div>
@@ -414,11 +433,11 @@ async function loadL() {
       const d     = new Date(l.fecha);
       const fecha = d.toLocaleDateString('es', { day: '2-digit', month: 'short' }).toUpperCase();
       const parts = [];
-      if (l.entreno_completado) parts.push('🏋️ ENTRENO');
-      if (l.sueno)              parts.push(`💤 ${l.sueno}h`);
-      if (l.energia)            parts.push(`⚡ E${l.energia}`);
-      if (l.nutricion)          parts.push(`🥗 N${l.nutricion}`);
-      if (l.tareas_completadas) parts.push(`☑ ${l.tareas_completadas}/5`);
+      if (l.entreno_completado) parts.push('ENTRENO');
+      if (l.sueno)              parts.push(`${l.sueno}h`);
+      if (l.energia)            parts.push(`E${l.energia}`);
+      if (l.nutricion)          parts.push(`N${l.nutricion}`);
+      if (l.tareas_completadas) parts.push(`${l.tareas_completadas}/5 tareas`);
 
       return `<div class="li">
   <span class="li-date">${fecha}</span>
@@ -625,8 +644,8 @@ async function showMissionModal() {
 
     if (logAyer) {
       html += `<p style="font-size:11px;color:var(--text-3);margin-top:8px">
-        AYER — 💤${logAyer.sueno || '?'}h ·
-        ${logAyer.entreno_completado ? '🏋️ ENTRENO ✓' : '🛌 DESCANSO'}
+        AYER — ${logAyer.sueno || '?'}h ·
+        ${logAyer.entreno_completado ? 'ENTRENO OK' : 'DESCANSO'}
       </p>`;
     }
 

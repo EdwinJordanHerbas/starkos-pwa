@@ -208,7 +208,7 @@
 }
 
 .task-dot.active::after {
-  background: linear-gradient(180deg, #5DE3FF 0%, #8B4DFF 100%);
+  background: linear-gradient(180deg, #A87BFF 0%, #6425D0 100%);
   box-shadow: 0 0 8px rgba(139, 77, 255, 0.7);
 }
 
