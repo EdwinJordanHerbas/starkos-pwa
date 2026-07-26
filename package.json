@@ -1,7 +1,7 @@
-{
+﻿{
   "name": "okirosport",
   "version": "3.0.0",
-  "description": "OkiroSport — sistema personal de rendimiento híbrido (PWA + backend)",
+  "description": "OKIRO — levántate. Sistema de rendimiento (PWA + backend)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

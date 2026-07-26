@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // MOCK DE DATOS — SOLO DESARROLLO LOCAL
 // ============================================================
 // Solo se activa si la URL lleva ?mock=1 (o localStorage.OKIRO_MOCK='1').
@@ -96,7 +96,7 @@
   ];
 
   const MOCK_PROYECTOS = [
-    { id: 1, nombre: 'OkiroSport PWA',      objetivo: 'MVP desplegado',          progreso: 78, ultima_accion: 'Deploy v2 + módulo gym' },
+    { id: 1, nombre: 'OKIRO PWA',      objetivo: 'MVP desplegado',          progreso: 78, ultima_accion: 'Deploy v2 + módulo gym' },
     { id: 2, nombre: 'Agencia IA Freelance', objetivo: 'Primer cliente cerrado',  progreso: 45, ultima_accion: 'Propuesta cliente #3'   },
     { id: 3, nombre: 'Contenido Training',   objetivo: '1k seguidores',           progreso: 30, ultima_accion: 'Vídeo Press Banca'       }
   ];

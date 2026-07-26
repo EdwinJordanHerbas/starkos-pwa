@@ -509,7 +509,12 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
 #lock {
   position:        fixed;
   inset:           0;
-  background:      var(--bg-base);
+  /* El horizonte de marca: aura violeta asomando por el tercio inferior.
+     assets/lock-bg.png encima si existe; el degradado es el fallback. */
+  background:
+    url('/assets/lock-bg.png') center bottom / cover no-repeat,
+    linear-gradient(to top, rgba(139, 77, 255, 0.22), transparent 45%),
+    var(--bg-base);
   z-index:         300;
   display:         flex;
   align-items:     center;

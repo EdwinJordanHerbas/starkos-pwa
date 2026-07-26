@@ -382,10 +382,12 @@ function renderChecklist(d) {
 function renderStreakInfo() {
   const el = document.getElementById('hoy-streak-info');
   if (!el) return;
-  const lvl = localStorage.getItem('okiro_lvl') || '1';
-  const xp  = parseInt(localStorage.getItem('okiro_xp') || '0', 10);
+  const lvl    = localStorage.getItem('okiro_lvl') || '1';
+  const xp     = parseInt(localStorage.getItem('okiro_xp') || '0', 10);
+  const streak = parseInt(localStorage.getItem('okiro_streak') || '0', 10);
+  const rank   = localStorage.getItem('okiro_rank') || 'E';
   el.innerHTML = `
-    <span class="hoy-streak-fire">🔥</span>
+    <span style="color:${AURA_COLOR[rank] || '#8B4DFF'}">RACHA ${streak} ${streak === 1 ? 'DÍA' : 'DÍAS'}</span>
     <span>LVL ${lvl}</span>
     <span class="hoy-streak-xp">${xp.toLocaleString('es')} XP</span>`;
 }
@@ -444,13 +446,43 @@ function dayXP(l) {
   return xp;
 }
 
-function rankForLevel(lvl) {
-  if (lvl >= 26) return ['S', 'rank-s'];
-  if (lvl >= 17) return ['A', 'rank-a'];
-  if (lvl >= 10) return ['B', 'rank-b'];
-  if (lvl >= 5)  return ['C', 'rank-c'];
-  if (lvl >= 2)  return ['D', 'rank-d'];
+/* Racha: días seguidos con registro, contando hacia atrás desde hoy.
+   Si hoy aún no has registrado, la racha de ayer sigue viva (no se rompe
+   hasta que el día termina sin registro). */
+function currentStreak(logs) {
+  if (!Array.isArray(logs) || !logs.length) return 0;
+  const days = new Set(logs.map(l => String(l.fecha).slice(0, 10)));
+  const iso  = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const d = new Date();
+  if (!days.has(iso(d))) d.setDate(d.getDate() - 1);
+  let streak = 0;
+  while (days.has(iso(d))) { streak++; d.setDate(d.getDate() - 1); }
+  return streak;
+}
+
+/* El rango mide constancia, no fuerza: días seguidos levantándote y
+   registrando (kit de marca). El nivel/XP sigue midiendo volumen aparte. */
+function rankForStreak(n) {
+  if (n >= 60) return ['S', 'rank-s'];
+  if (n >= 30) return ['A', 'rank-a'];
+  if (n >= 14) return ['B', 'rank-b'];
+  if (n >= 7)  return ['C', 'rank-c'];
+  if (n >= 3)  return ['D', 'rank-d'];
   return ['E', 'rank-e'];   // donde empieza todo el mundo
+}
+
+/* El aura del símbolo de cabecera sube y se enciende con el rango */
+const AURA_COLOR = { E: '#4B4557', D: '#6D5A9E', C: '#8B4DFF', B: '#A472FF', A: '#C08BFF', S: '#E4C4FF' };
+const AURA_CY    = { E: 76, D: 70, C: 62, B: 58, A: 55, S: 52 };
+function setHdrAura(label) {
+  const aura  = document.getElementById('hdr-aura');
+  const faint = document.getElementById('hdr-faint');
+  const cy    = AURA_CY[label] ?? 62;
+  if (aura) {
+    aura.setAttribute('cy', cy);
+    aura.setAttribute('stroke', AURA_COLOR[label] || '#8B4DFF');
+  }
+  if (faint) faint.setAttribute('cy', cy);
 }
 
 function updatePlayer(logs) {
@@ -471,14 +503,26 @@ function updatePlayer(logs) {
   if (lvlEl)  lvlEl.textContent  = 'LVL ' + lvl;
   if (fillEl) fillEl.style.width = Math.min(100, Math.round((rem / need) * 100)) + '%';
   if (xpEl)   xpEl.textContent   = rem + ' / ' + need + ' XP';
+
+  /* Rango por racha, no por nivel (kit de marca) */
+  const streak = currentStreak(logs);
+  const [label, cls] = rankForStreak(streak);
   if (chip) {
-    const [label, cls] = rankForLevel(lvl);
     chip.textContent = label;
-    chip.className    = 'rank-badge ' + cls;
+    chip.className   = 'rank-badge ' + cls;
   }
+  setHdrAura(label);
+
+  const prevRank = localStorage.getItem('okiro_rank') || '';
+  const ORDER = 'EDCBAS';
+  if (prevRank && ORDER.indexOf(label) > ORDER.indexOf(prevRank) && typeof toast === 'function') {
+    toast(`RANGO ${label}. El aura sube.`, 'ok');
+  }
+  localStorage.setItem('okiro_rank', label);
+  localStorage.setItem('okiro_streak', String(streak));
 
   if (prevLvl && lvl > prevLvl && typeof toast === 'function') {
-    toast(`⬆ NIVEL ${lvl} — RANGO ${rankForLevel(lvl)[0]}`, 'ok');
+    toast(`NIVEL ${lvl}.`, 'ok');
   }
   localStorage.setItem('okiro_lvl', String(lvl));
 

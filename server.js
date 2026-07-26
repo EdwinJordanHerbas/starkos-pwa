@@ -1,4 +1,4 @@
-// OkiroSport Backend v3 — producción
+﻿// OKIRO Backend v4 — producción
 // Requiere Node 18+ (usa fetch global)
 const express = require('express');
 const { Pool } = require('pg');
@@ -134,7 +134,8 @@ app.get('/health', async (req, res) => {
 // ════════════════════════════════════════════════════════
 app.get('/logs', async (req, res) => {
   try {
-    const { rows } = await db('SELECT * FROM daily_logs ORDER BY fecha DESC LIMIT 30');
+    // 90 días: con 30 el rango S (racha de 60+) era incomputable en el cliente
+    const { rows } = await db('SELECT * FROM daily_logs ORDER BY fecha DESC LIMIT 90');
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -524,7 +525,8 @@ async function buildPromptDaily() {
     { calorias: 0, proteinas: 0, carbos: 0, grasas: 0 }
   );
   const entreno = logHoy.entreno_completado ? `sí (${logHoy.tipo_entreno || 'sin tipo'})` : 'no';
-  return `Eres el sistema de análisis de rendimiento de OkiroSport.
+  return `Eres el sistema OKIRO ("levántate"). Hablas en imperativo, corto y sin adornos.
+Constatas, no consuelas ni celebras de más. Cero emojis, cero exclamaciones.
 Atleta: ${APP_USER_NAME}. Híbrido gym + running + emprendedor.
 
 LOG DE HOY:
@@ -545,7 +547,7 @@ Da un análisis breve (máx 150 palabras) con:
 2. Punto fuerte
 3. Punto a mejorar mañana
 4. Puntuación del día X/10
-Responde en español, tono directo de sistema RPG.`;
+Responde en español. Sin emojis. Frases cortas, de sistema, no de coach.`;
 }
 
 async function buildPromptWeekly() {
@@ -558,7 +560,8 @@ async function buildPromptWeekly() {
   const media = (fn) => logs.length ? (logs.reduce((s, l) => s + (parseFloat(fn(l)) || 0), 0) / logs.length).toFixed(1) : '—';
   const totalTareas = logs.reduce((s, l) => s + (parseInt(l.tareas_completadas) || 0), 0);
   const tipos = [...new Set(logs.filter(l => l.entreno_completado && l.tipo_entreno).map(l => l.tipo_entreno))].join(', ') || 'ninguno';
-  return `Eres el sistema de análisis de rendimiento de OkiroSport.
+  return `Eres el sistema OKIRO ("levántate"). Hablas en imperativo, corto y sin adornos.
+Constatas, no consuelas ni celebras de más. Cero emojis, cero exclamaciones.
 Atleta: ${APP_USER_NAME}. Híbrido gym + running + emprendedor.
 
 RESUMEN SEMANAL (últimos 7 días):
@@ -575,8 +578,8 @@ Da un análisis semanal (máx 200 palabras) con:
 2. Mejor día y por qué
 3. Patrón a corregir
 4. Objetivo concreto para la próxima semana
-5. Rango de la semana: D/C/B/A/S con justificación
-Responde en español, tono directo de sistema RPG.`;
+5. Rango de la semana: E/D/C/B/A/S con justificación
+Responde en español. Sin emojis. Frases cortas, de sistema, no de coach.`;
 }
 
 app.post('/ia/resumen', async (req, res) => {
@@ -708,7 +711,7 @@ app.patch('/logs/:fecha/nota', async (req, res) => {
 
 // ── Fallback SPA: cualquier GET no-API sirve el index ────
 app.listen(PORT, () => {
-  console.log(`OkiroSport Backend v3.0 · :${PORT}`);
+  console.log(`OKIRO Backend v4.0 · :${PORT}`);
   console.log(`· Auth:  ${APP_TOKEN ? 'ACTIVADA (APP_TOKEN)' : 'DESACTIVADA — define APP_TOKEN en producción'}`);
   console.log(`· IA:    ${ANTHROPIC_KEY ? `activa · modelo ${AI_MODEL} · límite ${AI_DAILY_LIMIT}/día` : 'sin ANTHROPIC_API_KEY'}`);
 });
