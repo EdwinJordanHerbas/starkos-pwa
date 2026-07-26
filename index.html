@@ -3,16 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="description" content="OkiroSport — tu sistema personal de rendimiento híbrido: entrenamiento, nutrición con IA, proyectos y análisis diario.">
-<meta name="theme-color" content="#000000">
+<meta name="description" content="OKIRO — levántate. Sistema de rendimiento: entrenamiento, nutrición con IA, proyectos y análisis diario.">
+<meta name="theme-color" content="#0A0612">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="OkiroSport">
+<meta name="apple-mobile-web-app-title" content="OKIRO">
 <link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
-<title>OkiroSport — Sistema de rendimiento</title>
+<title>OKIRO — Levántate</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -22,12 +23,21 @@
 <link rel="stylesheet" href="src/css/animations.css">
 </head>
 <body>
-<div id="splash"><h1>OKIROSPORT</h1><p>HYBRID ATHLETE · DIGITAL BUILDER</p><div class="sbar"><div class="sfill"></div></div></div>
+<div id="splash">
+  <svg viewBox="0 0 100 100" width="86" height="86" aria-hidden="true" style="margin:0 auto 6px">
+    <defs><clipPath id="splash-hz"><rect x="0" y="0" width="100" height="62"/></clipPath></defs>
+    <circle cx="50" cy="62" r="24" fill="none" stroke="#948AA8" stroke-width="5" opacity="0.28"/>
+    <circle cx="50" cy="62" r="24" fill="none" stroke="#8B4DFF" stroke-width="5" clip-path="url(#splash-hz)"/>
+    <circle cx="50" cy="62" r="12" fill="#8B4DFF" clip-path="url(#splash-hz)"/>
+    <line x1="14" y1="62" x2="86" y2="62" stroke="#EFE9F7" stroke-width="3" stroke-linecap="square"/>
+  </svg>
+  <h1>OKIRO</h1><p>LEVÁNTATE</p><div class="sbar"><div class="sfill"></div></div>
+</div>
 
 <!-- Pantalla de acceso (solo si el servidor tiene APP_TOKEN) -->
 <div id="lock" style="display:none">
   <div class="lock-card">
-    <h2>OKIROSPORT</h2>
+    <h2>OKIRO</h2>
     <p>Introduce tu clave de acceso</p>
     <input type="password" id="lock-input" placeholder="Clave de acceso" autocomplete="current-password">
     <button class="bs" onclick="unlock()">ENTRAR</button>
@@ -76,7 +86,15 @@
 <div id="app">
  <div id="hdr">
   <div id="hdr-top">
-   <div><p id="fh">HOY</p><h1>OKIRO<span>SPORT</span></h1></div>
+   <div id="hdr-brand">
+    <svg viewBox="0 0 100 100" width="26" height="26" aria-hidden="true" id="hdr-mark">
+     <defs><clipPath id="hdr-hz"><rect x="0" y="0" width="100" height="62"/></clipPath></defs>
+     <circle cx="50" cy="62" r="24" fill="none" stroke="currentColor" stroke-width="6" opacity="0.25"/>
+     <circle cx="50" cy="62" r="24" fill="none" stroke="var(--brand)" stroke-width="6" clip-path="url(#hdr-hz)"/>
+     <line x1="14" y1="62" x2="86" y2="62" stroke="currentColor" stroke-width="4" stroke-linecap="square"/>
+    </svg>
+    <div><p id="fh">HOY</p><h1>OKIRO</h1></div>
+   </div>
    <div id="hdr-right"><div id="clk">00:00</div><span id="lvl-label">LVL 1</span></div>
   </div>
   <div id="xp-row">
@@ -124,6 +142,14 @@
    <div class="card glass hoy-nota-wrap">
     <div class="ct">Nota del día</div>
     <textarea class="hoy-nota" id="nota-dia" placeholder="Anotación del día..."></textarea>
+   </div>
+   <!-- Coach IA — abre el panel de análisis (sec-ia) -->
+   <div class="card glass" onclick="ss('ia')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+    <div>
+     <div class="ct">◑ COACH IA</div>
+     <div style="font-size:11px;color:var(--text-3)">Analiza tu día con un toque</div>
+    </div>
+    <span style="color:var(--accent, #33cfff);font-size:18px">→</span>
    </div>
   </div>
 
@@ -188,9 +214,10 @@
   </div>
 
   <!-- ── IA ────────────────────────────────────────────── -->
-  <!-- IA movida fuera del nav principal — accesible desde ajustes -->
-  <div class="sec" id="sec-ia" style="display:none">
+  <!-- IA fuera del nav principal — se abre desde la card COACH IA de HOY -->
+  <div class="sec" id="sec-ia">
    <div class="stl">ANÁLISIS IA</div>
+   <button class="date-nav-btn" onclick="ss('hoy', document.querySelector('.nb[data-sec=hoy]'))" style="margin-bottom:12px">◀ VOLVER</button>
    <button class="bia" id="bd" onclick="genIA('daily')">RESUMEN DIARIO</button>
    <button class="bia" id="bs2" onclick="genIA('weekly')">RESUMEN SEMANAL</button>
    <div class="ib" id="io"><div class="ip">Tu coach IA analiza sueño, entreno, nutrición y proyectos. Pulsa un botón para generar el análisis — no necesitas configurar nada.</div></div>

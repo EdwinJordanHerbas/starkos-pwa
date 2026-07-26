@@ -17,7 +17,9 @@
   // ── DATOS MOCK ──────────────────────────────────────────────
   // Edita estos valores para simular distintos estados del día.
 
-  const HOY = new Date().toISOString().split('T')[0];
+  // Fecha local, igual que hoyISO() en app.js (toISOString() daría la de UTC).
+  const _h = new Date();
+  const HOY = `${_h.getFullYear()}-${String(_h.getMonth()+1).padStart(2,'0')}-${String(_h.getDate()).padStart(2,'0')}`;
 
   const MOCK_LOG_HOY = {
     id: 1,

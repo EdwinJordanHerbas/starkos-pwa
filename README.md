@@ -31,11 +31,18 @@ ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_MODEL=claude-haiku-4-5           # por defecto; ~0,2 céntimos por análisis
 AI_DAILY_LIMIT=40                          # tope de llamadas IA al día (protege tu factura)
 
+# Obligatoria en producción — sin ella el servidor NO arranca (sale con exit 1).
+# En local se puede omitir arrancando con NODE_ENV=development.
+STRAVA_WEBHOOK_TOKEN=...
+
+# Zona horaria para las fechas del registro diario. Por defecto Europe/Madrid.
+# El servidor corre en UTC: sin esto, lo registrado de 00:00 a 02:00 caería en el día anterior.
+APP_TZ=Europe/Madrid
+
 # Opcionales
 PORT=3000
 STRAVA_CLIENT_ID=...
 STRAVA_CLIENT_SECRET=...
-STRAVA_WEBHOOK_TOKEN=...
 ```
 
 **Coste de la IA** (con Haiku 4.5): una foto de comida ≈ 0,2 céntimos; un resumen ≈ 0,3 céntimos. Uso personal intensivo (10 análisis/día) ≈ **menos de 1 €/mes**. Puedes subir a `claude-sonnet-5` u `claude-opus-4-8` en `ANTHROPIC_MODEL` si quieres análisis más finos.
@@ -61,10 +68,13 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## Desarrollo local sin base de datos
 
-```
-node server.js          # o npm start
+```bash
+NODE_ENV=development node server.js     # o npm start
 → http://localhost:3000/?mock=1
 ```
+
+`NODE_ENV=development` es necesario en local: sin él el servidor aborta pidiendo
+`STRAVA_WEBHOOK_TOKEN`. En PowerShell: `$env:NODE_ENV="development"; node server.js`.
 
 `?mock=1` activa `mock.js`, que intercepta la API con datos de ejemplo (incluida la IA). Sin ese parámetro el mock **no hace nada**, así que es seguro en producción.
 

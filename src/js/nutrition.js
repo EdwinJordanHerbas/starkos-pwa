@@ -24,7 +24,7 @@ function editGoals() {
 
 /* ── 2. CARGAR ──────────────────────────────────────────────────── */
 async function loadNutri() {
-  const fecha = new Date().toISOString().split('T')[0];
+  const fecha = hoyISO();
 
   try {
     const res  = await api(`/nutricion/${fecha}`);
@@ -114,7 +114,7 @@ async function guardarComida() {
     return;
   }
 
-  const fecha = new Date().toISOString().split('T')[0];
+  const fecha = hoyISO();
 
   try {
     const res = await api('/nutricion', {

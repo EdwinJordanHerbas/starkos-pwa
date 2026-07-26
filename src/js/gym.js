@@ -186,17 +186,22 @@ function renderRutinaSelect() {
   gc.innerHTML =
     '<div id="gym-objectives-wrap"><div class="gym-obj-loading">Calculando progreso…</div></div>' +
     '<div class="stl" style="margin:16px 0 10px">ELIGE RUTINA DE HOY</div>' +
-    gymRutinas.map(r => `
-      <div class="rc" onclick="iniciarSesion(${r.id})">
+    gymRutinas.map(r => {
+      // Banner de fondo por rutina (assets/gym-*.webp) — degradado para legibilidad del texto
+      const img = GYM_BANNERS[(r.nombre || '').toUpperCase()];
+      const bg  = img ? ` style="background:linear-gradient(90deg, rgba(10,6,18,.97) 32%, rgba(10,6,18,.55)), url('${img}') right center / cover no-repeat"` : '';
+      return `
+      <div class="rc"${bg} onclick="iniciarSesion(${r.id})">
         <div class="rn">${r.nombre || ''}</div>
         <div class="rd">${r.descripcion || ''}</div>
-      </div>`
-    ).join('');
+      </div>`;
+    }).join('');
 
   renderGymObjectives();
 }
 
 const GYM_ICONS = { 'PUSH': '💪', 'PULL': '🔄', 'LEGS': '🦵' };
+const GYM_BANNERS = { 'PUSH': 'assets/gym-push.png', 'PULL': 'assets/gym-pull.png', 'LEGS': 'assets/gym-legs.png' };
 
 async function renderGymObjectives() {
   const wrap = document.getElementById('gym-objectives-wrap');

@@ -13,6 +13,12 @@ const APP_USER_NAME  = process.env.APP_USER_NAME || 'Stark';
 const AI_MODEL       = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
 const AI_DAILY_LIMIT = parseInt(process.env.AI_DAILY_LIMIT || '40', 10);
 const ANTHROPIC_KEY  = process.env.ANTHROPIC_API_KEY;
+const APP_TZ         = process.env.APP_TZ || 'Europe/Madrid';       // zona horaria del usuario
+
+// Fecha de HOY en la zona del usuario, NO en UTC.
+// El servidor corre en UTC: con toISOString() todo lo registrado entre las
+// 00:00 y las 02:00 (hora española) se guardaba en el día anterior y rompía la racha.
+const hoyStr = () => new Intl.DateTimeFormat('en-CA', { timeZone: APP_TZ }).format(new Date());
 
 // ── Estáticos (la PWA) — siempre públicos ────────────────
 app.use(express.static(__dirname, {
@@ -60,7 +66,7 @@ const db = (q, p) => pool.query(q, p);
 // ── LÍMITE DIARIO DE IA (protege tu factura) ─────────────
 let aiUsage = { day: '', count: 0 };
 function aiQuotaOk() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = hoyStr();
   if (aiUsage.day !== today) aiUsage = { day: today, count: 0 };
   if (aiUsage.count >= AI_DAILY_LIMIT) return false;
   aiUsage.count++;
@@ -109,7 +115,7 @@ function parseJSONLoose(text) {
   try { return JSON.parse(m[0]); } catch { return {}; }
 }
 
-const hoyStr = () => new Date().toISOString().split('T')[0];
+// hoyStr() se define arriba, junto a APP_TZ (fecha local del usuario, no UTC).
 
 // ════════════════════════════════════════════════════════
 // HEALTH

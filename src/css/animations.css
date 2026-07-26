@@ -1,4 +1,4 @@
-/* OkiroSport — Keyframes y Efectos Visuales */
+﻿/* OkiroSport — Keyframes y Efectos Visuales */
 
 /* ════════════════════════════════════════════════════════════════ */
 /* KEYFRAMES                                                        */
@@ -80,7 +80,7 @@
   width:         200px;
   height:        200px;
   border-radius: 50%;
-  background:    radial-gradient(circle, rgba(0, 217, 255, 0.6), transparent 70%);
+  background:    radial-gradient(circle, rgba(139, 77, 255, 0.6), transparent 70%);
   filter:        blur(40px);
   animation:     splashPulse 1.5s ease-in-out infinite;
 }
@@ -93,7 +93,7 @@
   color:          var(--text-1);
   position:       relative;
   z-index:        2;
-  text-shadow:    0 0 20px rgba(0, 217, 255, 0.5);
+  text-shadow:    0 0 20px rgba(139, 77, 255, 0.5);
   margin:         0;
 }
 
@@ -170,9 +170,9 @@
   box-shadow:
     inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
     inset 0 -1.5px 0 rgba(0, 0, 0, 0.6),
-    0 0 0 0.5px rgba(0, 217, 255, 0.3),
+    0 0 0 0.5px rgba(139, 77, 255, 0.3),
     0 24px 60px rgba(0, 0, 0, 0.8),
-    0 0 32px rgba(0, 217, 255, 0.2);
+    0 0 32px rgba(139, 77, 255, 0.2);
   animation:               modalIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -181,7 +181,7 @@
   position:       absolute;
   top: 0; left: 5%; right: 5%;
   height:         1.5px;
-  background:     linear-gradient(90deg, transparent, rgba(0,217,255,0.7), transparent);
+  background:     linear-gradient(90deg, transparent, rgba(139, 77, 255,0.7), transparent);
   pointer-events: none;
 }
 

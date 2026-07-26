@@ -1,27 +1,35 @@
-/* OkiroSport — Variables, Reset, Layout Global */
+﻿/* OKIRO — Variables, Reset, Layout Global */
 
 /* ── VARIABLES ──────────────────────────────────────────────────── */
 :root {
-  /* Fondo */
-  --bg-base:   #000000;
-  --surface-1: #0A0A0E;
-  --surface-2: #14141A;
+  /* Fondo — violeta-negro, nunca negro neutro (kit de marca) */
+  --bg-base:   #0A0612;
+  --surface-1: #150E24;
+  --surface-2: #1E1533;
 
-  /* Marca */
-  --brand:      #00D9FF;
-  --brand-soft: #7DD3FC;
+  /* Marca — el aura */
+  --brand:      #8B4DFF;
+  --brand-soft: #A87BFF;
+  --brand-deep: #6425D0;
 
-  /* Texto */
-  --text-1: #FFFFFF;
-  --text-2: #E8E8EC;
-  --text-3: #8E8E93;
-  --text-4: #48484A;
+  /* Texto — blanco con sesgo violeta */
+  --text-1: #EFE9F7;
+  --text-2: #DCD4E8;
+  --text-3: #948AA8;
+  --text-4: #4B4557;
 
-  /* Estados */
-  --success: #34D399;
-  --warning: #FBBF24;
-  --danger:  #F87171;
-  --rank-s:  #A78BFA;
+  /* Estados — fuera de la escala de aura para no competir con ella */
+  --success: #3FB27F;
+  --warning: #E0A42B;
+  --danger:  #E05252;
+
+  /* Escala de aura — el color se gana subiendo de rango */
+  --rank-e: #4B4557;
+  --rank-d: #6D5A9E;
+  --rank-c: #8B4DFF;
+  --rank-b: #A472FF;
+  --rank-a: #C08BFF;
+  --rank-s: #E4C4FF;
 
   /* Tipografía */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -35,14 +43,14 @@
   --radius-pill: 100px;
 
   /* Glow */
-  --glow-cyan:        0 0 16px rgba(0, 217, 255, 0.5);
-  --glow-cyan-strong: 0 0 24px rgba(0, 217, 255, 0.8);
+  --glow-cyan:        0 0 16px rgba(139, 77, 255, 0.5);
+  --glow-cyan-strong: 0 0 24px rgba(139, 77, 255, 0.8);
   --glow-white:       0 0 20px rgba(255, 255, 255, 0.4);
 
   /* Compat — usados internamente por animaciones y transiciones */
   --transition:  150ms ease;
-  --glow:        rgba(0, 217, 255, 0.25);
-  --glow-strong: rgba(0, 217, 255, 0.5);
+  --glow:        rgba(139, 77, 255, 0.25);
+  --glow-strong: rgba(139, 77, 255, 0.5);
   --glow-green:  rgba(52, 211, 153, 0.25);
 
   /* Compat — alias del diseño anterior (evitan estilos rotos) */
@@ -88,7 +96,7 @@ body {
 }
 
 ::selection {
-  background: rgba(0, 217, 255, 0.3);
+  background: rgba(139, 77, 255, 0.3);
   color:      #fff;
 }
 
@@ -158,7 +166,7 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
   width:         240px;
   height:        240px;
   border-radius: 50%;
-  background:    radial-gradient(circle, rgba(0, 217, 255, 0.35), transparent 70%);
+  background:    radial-gradient(circle, rgba(139, 77, 255, 0.35), transparent 70%);
   filter:        blur(60px);
 }
 
@@ -170,7 +178,7 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
   width:         280px;
   height:        280px;
   border-radius: 50%;
-  background:    radial-gradient(circle, rgba(52, 211, 153, 0.25), transparent 70%);
+  background:    radial-gradient(circle, rgba(100, 37, 208, 0.28), transparent 70%);
   filter:        blur(60px);
 }
 
@@ -238,7 +246,7 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
   width:         0%;
   border-radius: 4px;
   background:    linear-gradient(90deg, var(--brand), var(--brand-soft));
-  box-shadow:    0 0 10px rgba(0, 217, 255, 0.65);
+  box-shadow:    0 0 10px rgba(139, 77, 255, 0.65);
   transition:    width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -310,7 +318,7 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
   color:          var(--brand);
   letter-spacing: 1.5px;
   font-weight:    700;
-  text-shadow:    0 0 8px rgba(0, 217, 255, 0.5);
+  text-shadow:    0 0 8px rgba(139, 77, 255, 0.5);
 }
 
 /* ── NAVEGACIÓN — Liquid Glass (estilo iOS 26 / Instagram) ──────── */
@@ -388,7 +396,7 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
     inset 0 -1px 0 rgba(0,0,0,0.25),
     0 0 0 0.5px rgba(255,255,255,0.10),
     0 4px 14px rgba(0,0,0,0.35),
-    0 0 18px rgba(0, 217, 255, 0.18);
+    0 0 18px rgba(139, 77, 255, 0.18);
   transform:  translateX(0);
   transition: transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.3s ease;
   will-change: transform;
@@ -416,7 +424,7 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
 }
 
 .nb.active .ni {
-  filter:    drop-shadow(0 0 8px rgba(0, 217, 255, 0.8));
+  filter:    drop-shadow(0 0 8px rgba(139, 77, 255, 0.8));
   transform: translateY(-1px);
 }
 
@@ -440,7 +448,7 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 217, 255, 0.3);
+  background: rgba(139, 77, 255, 0.3);
 }
 
 * {
@@ -555,7 +563,7 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
 
 .lock-card input:focus {
   border-color: var(--brand);
-  box-shadow:   0 0 12px rgba(0, 217, 255, 0.25);
+  box-shadow:   0 0 12px rgba(139, 77, 255, 0.25);
 }
 
 #lock-err {
@@ -586,7 +594,7 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
 @media (min-width: 768px) {
   body {
     background:
-      radial-gradient(ellipse 60% 45% at 70% 10%, rgba(0, 217, 255, 0.06), transparent),
+      radial-gradient(ellipse 60% 45% at 70% 10%, rgba(139, 77, 255, 0.06), transparent),
       radial-gradient(ellipse 55% 40% at 20% 80%, rgba(52, 211, 153, 0.05), transparent),
       var(--bg-base);
   }
@@ -605,7 +613,25 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
 
   /* Hover útil con ratón */
   .nb:hover        { color: var(--brand-soft); }
-  .rc:hover        { border-color: rgba(0, 217, 255, 0.4); cursor: pointer; }
+  .rc:hover        { border-color: rgba(139, 77, 255, 0.4); cursor: pointer; }
   button:hover     { filter: brightness(1.08); }
 }
 
+
+/* ── MARCA EN LA CABECERA (rebranding OKIRO) ────────────────────── */
+#hdr-brand {
+  display:     flex;
+  align-items: center;
+  gap:         9px;
+}
+
+#hdr-mark {
+  flex-shrink: 0;
+  color:       var(--text-1);
+  filter:      drop-shadow(0 0 6px rgba(139, 77, 255, 0.35));
+}
+
+/* El aura nunca baja del horizonte: sin animaciones que lo hundan */
+@media (prefers-reduced-motion: reduce) {
+  #hdr-mark { filter: none; }
+}

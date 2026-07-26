@@ -1,16 +1,28 @@
 {
-  "name": "OkiroSport — Sistema de rendimiento",
-  "short_name": "OkiroSport",
-  "description": "Tu sistema personal de rendimiento híbrido: entrenamiento, nutrición con IA, proyectos y análisis diario.",
+  "name": "OKIRO — Levántate",
+  "short_name": "OKIRO",
+  "description": "Levántate. Sistema de rendimiento: entrenamiento, nutrición con IA, proyectos y análisis diario. Tu rango mide constancia, no fuerza.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#0A0612",
+  "theme_color": "#0A0612",
   "lang": "es",
   "categories": ["fitness", "health", "lifestyle", "productivity"],
   "icons": [
+    {
+      "src": "icons/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "icons/icon-192.png",
       "sizes": "192x192",

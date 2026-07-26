@@ -1,9 +1,9 @@
-// OkiroSport — Service Worker
+﻿// OkiroSport — Service Worker
 // Estrategia:
 //  · Estáticos (css/js/iconos/fuentes): cache-first con actualización en segundo plano
 //  · Navegación (index.html): network-first con fallback a caché (offline)
 //  · API (/logs, /rutinas, ...): siempre red — nunca cachear datos
-const VERSION = 'okiro-v3.0.6';
+const VERSION = 'okiro-v4.0.0';
 const STATIC_CACHE = `${VERSION}-static`;
 
 const PRECACHE = [

@@ -1,4 +1,4 @@
-// OkiroSport — Init, API, Reloj, Navegación, Estado Global
+﻿// OkiroSport — Init, API, Reloj, Navegación, Estado Global
 
 /* ── 1. CONSTANTES ──────────────────────────────────────────────── */
 const A          = '';
@@ -281,10 +281,11 @@ function renderEnergyRing(d) {
   if (!el) return;
 
   const score = d.energia_score || 0;
-  const color = score >= 85 ? '#00D9FF'
-              : score >= 65 ? '#34D399'
-              : score >= 40 ? '#FBBF24'
-              :               '#F87171';
+  // Escala de aura, no semáforo: la energía enciende el violeta, no lo cambia de color.
+  const color = score >= 85 ? '#E4C4FF'
+              : score >= 65 ? '#A472FF'
+              : score >= 40 ? '#8B4DFF'
+              :               '#4B4557';
   const label = score >= 85 ? 'En forma'
               : score >= 65 ? 'Bueno'
               : score >= 40 ? 'Regular'
@@ -448,7 +449,8 @@ function rankForLevel(lvl) {
   if (lvl >= 17) return ['A', 'rank-a'];
   if (lvl >= 10) return ['B', 'rank-b'];
   if (lvl >= 5)  return ['C', 'rank-c'];
-  return ['D', 'rank-d'];
+  if (lvl >= 2)  return ['D', 'rank-d'];
+  return ['E', 'rank-e'];   // donde empieza todo el mundo
 }
 
 function updatePlayer(logs) {
@@ -564,7 +566,7 @@ async function showMissionModal() {
 
     const ayer    = new Date();
     ayer.setDate(ayer.getDate() - 1);
-    const ayerStr = ayer.toISOString().split('T')[0];
+    const ayerStr = `${ayer.getFullYear()}-${String(ayer.getMonth()+1).padStart(2,'0')}-${String(ayer.getDate()).padStart(2,'0')}`;
     const logAyer = logs.find(l => l.fecha && String(l.fecha).startsWith(ayerStr));
 
     let html = '';
