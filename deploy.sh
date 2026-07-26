@@ -15,7 +15,7 @@ cp "$NGINX_SITE" "$NGINX_SITE.bak"
 echo ">> Descargar codigo de GitHub"
 rm -rf "$SRC" && mkdir -p "$SRC"
 curl -fsSL "$TARBALL" | tar xz -C "$SRC" --strip-components=1
-grep -q 'Backend v3' "$SRC/server.js" || { echo "!! GitHub aun no tiene la v3. Aborto sin tocar nada."; exit 1; }
+grep -qE 'Backend v[0-9]' "$SRC/server.js" || { echo "!! El server.js descargado no parece valido. Aborto sin tocar nada."; exit 1; }
 
 echo ">> Backend (server.js)"
 cp "$SRC/server.js" /opt/backend/server.js
