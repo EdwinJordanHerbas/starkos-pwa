@@ -1,4 +1,4 @@
-﻿// OkiroSport — Lógica de Proyectos
+// OkiroSport — Lógica de Proyectos
 
 /* ── ESTADO ─────────────────────────────────────────────────────── */
 let _editProjId = null;

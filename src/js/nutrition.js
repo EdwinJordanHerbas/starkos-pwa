@@ -1,4 +1,4 @@
-﻿// OkiroSport — Lógica de Nutrición
+// OkiroSport — Lógica de Nutrición
 
 /* ── 1. OBJETIVOS (editables, se guardan en el dispositivo) ─────── */
 const MACRO_DEFAULTS = { proteinas: 180, carbos: 300, grasas: 70, calorias: 2400 };

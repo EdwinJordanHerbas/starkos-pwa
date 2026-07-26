@@ -1,4 +1,4 @@
-﻿// OKIRO Backend v4 — producción
+// OKIRO Backend v4 — producción
 // Requiere Node 18+ (usa fetch global)
 const express = require('express');
 const fs   = require('fs');

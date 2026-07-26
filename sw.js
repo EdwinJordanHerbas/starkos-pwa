@@ -1,4 +1,4 @@
-﻿// OkiroSport — Service Worker
+// OkiroSport — Service Worker
 // Estrategia:
 //  · Estáticos (css/js/iconos/fuentes): cache-first con actualización en segundo plano
 //  · Navegación (index.html): network-first con fallback a caché (offline)

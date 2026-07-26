@@ -1,4 +1,4 @@
-﻿// OkiroSport — Lógica de Gym y Entrenamientos (v2 Enhanced)
+// OkiroSport — Lógica de Gym y Entrenamientos (v2 Enhanced)
 
 /* ── ESTADO ─────────────────────────────────────────────────────── */
 let gymRutinas        = [];

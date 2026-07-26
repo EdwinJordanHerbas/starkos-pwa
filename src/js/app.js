@@ -1,4 +1,4 @@
-﻿// OkiroSport — Init, API, Reloj, Navegación, Estado Global
+// OkiroSport — Init, API, Reloj, Navegación, Estado Global
 
 /* ── 1. CONSTANTES ──────────────────────────────────────────────── */
 const A          = '';

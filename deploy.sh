@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # OKIRO — despliegue en el droplet (Docker + nginx del host)
 # Uso:  bash /opt/deploy.sh
 set -euo pipefail
@@ -68,10 +68,17 @@ echo ">> Reiniciar contenedor backend"
 docker restart backend
 
 echo ">> Cron: mision diaria (cada hora) + sync de Notion (una vez al dia)"
-CRON_TICK='0 * * * * curl -fsS -X POST -H "Authorization: Bearer $(cat /opt/backend/.secrets/app_token 2>/dev/null)" http://127.0.0.1:3000/push/tick >/dev/null 2>&1'
+CRON_TICK='0 * * * * curl -fsS -X POST http://127.0.0.1:3000/push/tick >/dev/null 2>&1'
 CRON_NOTION='15 5 * * * curl -fsS -H "Authorization: Bearer $(cat /opt/backend/.secrets/app_token 2>/dev/null)" http://127.0.0.1:3000/notion/sync >/dev/null 2>&1'
-( crontab -l 2>/dev/null | grep -v 'push/tick' | grep -v 'notion/sync'; echo "$CRON_TICK"; echo "$CRON_NOTION" ) | crontab -
-echo "   cron instalado"
+# `|| true` es obligatorio: sin crontab previo, `crontab -l` sale con codigo 1 y
+# `set -e` mataba el subshell entero en silencio, dejando el cron sin instalar.
+ACTUAL="$(crontab -l 2>/dev/null || true)"
+{
+  printf '%s\n' "$ACTUAL" | grep -v 'push/tick' | grep -v 'notion/sync' | grep -v '^$' || true
+  echo "$CRON_TICK"
+  echo "$CRON_NOTION"
+} | crontab -
+crontab -l | grep -q 'push/tick' && echo "   cron instalado" || echo "   !! el cron NO se instalo"
 
 echo ">> DEPLOY OK. El backend tarda ~25s en reinstalar deps y arrancar."
 echo ">> Verifica con:  docker logs --tail 15 backend ; curl -s https://okirosport.es/health"
