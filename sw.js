@@ -3,7 +3,7 @@
 //  · Estáticos (css/js/iconos/fuentes): cache-first con actualización en segundo plano
 //  · Navegación (index.html): network-first con fallback a caché (offline)
 //  · API (/logs, /rutinas, ...): siempre red — nunca cachear datos
-const VERSION = 'okiro-v4.2.0';
+const VERSION = 'okiro-v5.0.0';
 const STATIC_CACHE = `${VERSION}-static`;
 
 const PRECACHE = [
@@ -27,7 +27,7 @@ const PRECACHE = [
 // Rutas de API — nunca pasan por caché
 const API_PREFIXES = ['/logs', '/proyectos', '/rutinas', '/ejercicios', '/sesiones',
                       '/nutricion', '/strava', '/notion', '/ia', '/auth', '/health',
-                      '/resumen'];   // faltaba: se cacheaba el dashboard de HOY como si fuera estático
+                      '/resumen', '/push', '/cruce', '/party'];   // /resumen faltaba: se cacheaba el dashboard de HOY como si fuera estatico
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -49,6 +49,36 @@ self.addEventListener('activate', (event) => {
         keys.filter(k => !k.startsWith(VERSION)).map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
+  );
+});
+
+// ── MISIÓN DIARIA (push) ──────────────────────────────────────────
+// El sistema avisa, no anima: título y cuerpo llegan ya redactados del backend.
+self.addEventListener('push', (event) => {
+  let d = { titulo: 'OKIRO', cuerpo: 'Misión diaria disponible.' };
+  try { d = { ...d, ...event.data.json() }; } catch { /* payload vacío: valores por defecto */ }
+  event.waitUntil(
+    self.registration.showNotification(d.titulo, {
+      body: d.cuerpo,
+      icon:  '/icons/icon-192.png',
+      badge: '/icons/favicon-32.png',
+      tag:   'okiro-mision',        // reemplaza el aviso anterior en vez de apilarlo
+      renotify: false,
+      requireInteraction: false
+    })
+  );
+});
+
+// Al tocar el aviso: reutilizar la ventana abierta si la hay, no abrir otra
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(lista => {
+      for (const c of lista) {
+        if (c.url.includes(self.location.origin) && 'focus' in c) return c.focus();
+      }
+      return self.clients.openWindow('/');
+    })
   );
 });
 

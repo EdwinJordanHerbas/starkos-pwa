@@ -121,6 +121,40 @@
       return mockOk({ ok: true });
     }
 
+    // GET /push/clave — sin claves VAPID en local
+    if (u.endsWith('/push/clave')) {
+      return mockOk({ clave: null, activo: false });
+    }
+
+    // GET /cruce/:dias — serie sintética para ver el gráfico en local
+    if (/\/cruce(\/\d+)?$/.test(u)) {
+      const dias = parseInt((u.match(/\/cruce\/(\d+)/) || [])[1] || '14', 10);
+      const serie = [];
+      for (let i = dias - 1; i >= 0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const hueco = i === 3 || i === 4;   // dos días sin registrar, para ver las franjas
+        serie.push(hueco
+          ? { fecha: k, sueno: null, energia: null, nutricion: null, kcal: null, entreno: 0, tareas: null, registrado: false }
+          : {
+              fecha: k,
+              sueno:     +(6 + Math.sin(i / 2) * 1.6).toFixed(1),
+              energia:   Math.round(6 + Math.sin(i / 2) * 2.4),
+              nutricion: Math.round(6 + Math.cos(i / 3) * 2),
+              kcal:      1800 + Math.round(Math.cos(i / 3) * 300),
+              entreno:   i % 3 === 0 ? 1 : 0,
+              tareas:    Math.round(50 + Math.sin(i / 2.2) * 35),
+              registrado: true
+            });
+      }
+      return mockOk({
+        dias, serie,
+        dias_registrados: serie.filter(s => s.registrado).length,
+        correlaciones: { sueno_energia: 0.78, sueno_tareas: 0.41, energia_tareas: 0.62, nutricion_energia: 0.12 },
+        progreso_proyectos_medio: 61.5
+      });
+    }
+
     // POST /ia/resumen — análisis IA simulado
     if (u.endsWith('/ia/resumen') && opts?.method === 'POST') {
       const tipo = JSON.parse(opts.body || '{}').tipo;

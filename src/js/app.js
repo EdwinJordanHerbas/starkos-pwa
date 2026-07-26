@@ -157,7 +157,7 @@ function ss(n, btn) {
   if (n === 'gym'       && typeof loadGym        === 'function') loadGym();
   if (n === 'nutri'     && typeof loadNutri      === 'function') loadNutri();
   if (n === 'proyectos' && typeof loadP          === 'function') loadP();
-  if (n === 'log')       loadL();
+  if (n === 'log')     { loadL(); loadCruce(); }
 
   if (typeof window.positionNavLens === 'function') window.positionNavLens();
 }
@@ -287,11 +287,15 @@ async function loadResumenDia(fecha) {
     renderEnergyRing(d);
     renderChecklist(d);
     renderStreakInfo();
+    /* Solo se ofrece el registro rápido si el dato es de hoy y aún no existe.
+       sueno_fuente !== 'manual' cubre el caso del fallback al último día registrado. */
+    renderSuenoQuick(fecha !== hoyISO() || (d.sueno_horas > 0 && d.sueno_fuente === 'manual'));
 
     if (notaEl) notaEl.value = d.nota || '';
 
   } catch {
     if (ringEl) ringEl.innerHTML = '<div class="hoy-loading">Sin datos para este día</div>';
+    renderSuenoQuick(fecha !== hoyISO());
   }
 }
 
@@ -700,6 +704,321 @@ function setupNotaDebounce() {
   });
 }
 
+/* ── 15b. CRUCE DE DATOS ────────────────────────────────────────── */
+/* El diferencial del producto: cuerpo, descanso y trabajo sobre el mismo eje.
+   Se dibuja en SVG en vez de canvas para que escale nítido y respete el tema. */
+
+let _cruceDias = 14;
+
+/* Cuatro series en la misma gama violeta se confunden entre sí. Como el kit
+   prohíbe un segundo acento, se distinguen por luminosidad Y por trazo: dos
+   codificaciones redundantes, que además funciona para daltonismo. */
+const CRUCE_SERIES = [
+  { clave: 'sueno',     etiqueta: 'Sueño',     color: '#E4C4FF', dash: '',      max: 10,  unidad: 'h'   },
+  { clave: 'energia',   etiqueta: 'Energía',   color: '#8B4DFF', dash: '',      max: 10,  unidad: '/10' },
+  { clave: 'nutricion', etiqueta: 'Nutrición', color: '#C08BFF', dash: '5 3',   max: 10,  unidad: '/10' },
+  { clave: 'tareas',    etiqueta: 'Tareas',    color: '#6D5A9E', dash: '1.5 3', max: 100, unidad: '%'   }
+];
+
+function setRangoCruce(dias, btn) {
+  _cruceDias = dias;
+  document.querySelectorAll('.cruce-btn').forEach(b => b.classList.toggle('active', b === btn));
+  loadCruce();
+}
+
+function textoCorrelacion(valor, a, b) {
+  if (valor == null) return null;
+  const fuerza = Math.abs(valor);
+  if (fuerza < 0.3) return null;                    // por debajo de 0.3 no dice nada
+  const signo = valor > 0 ? 'sube con' : 'baja cuando sube';
+  const grado = fuerza >= 0.6 ? 'Clara' : 'Leve';
+  return `${grado}: ${a} ${signo} ${b} (${valor > 0 ? '+' : ''}${valor})`;
+}
+
+async function loadCruce() {
+  const el = document.getElementById('cruce');
+  if (!el) return;
+  el.innerHTML = '<div class="empty-state">Cargando...</div>';
+
+  try {
+    const res = await api('/cruce/' + _cruceDias);
+    if (!res.ok) throw new Error(res.status);
+    const d = await res.json();
+
+    /* Un gráfico con dos puntos miente más que informa */
+    if (d.dias_registrados < 3) {
+      el.innerHTML = `
+        <div class="empty-state">
+          ${d.dias_registrados} ${d.dias_registrados === 1 ? 'día registrado' : 'días registrados'} de ${d.dias}.<br>
+          <span style="color:var(--text-4)">El cruce necesita al menos 3 para decir algo.</span>
+        </div>`;
+      return;
+    }
+
+    const W = 320, H = 132, PL = 4, PR = 4, PT = 8, PB = 16;
+    const n = d.serie.length;
+    const x = i => PL + (i * (W - PL - PR)) / Math.max(1, n - 1);
+    const y = (v, max) => PT + (1 - v / max) * (H - PT - PB);
+
+    /* Una línea por serie; los huecos parten el trazo en vez de inventar continuidad */
+    const lineas = CRUCE_SERIES.map(s => {
+      const tramos = [];
+      let actual = [];
+      d.serie.forEach((p, i) => {
+        const v = p[s.clave];
+        if (v == null) { if (actual.length > 1) tramos.push(actual); actual = []; return; }
+        actual.push(`${x(i).toFixed(1)},${y(v, s.max).toFixed(1)}`);
+      });
+      if (actual.length > 1) tramos.push(actual);
+      if (!tramos.length) return '';
+      return tramos.map(t =>
+        `<polyline points="${t.join(' ')}" fill="none" stroke="${s.color}"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                   ${s.dash ? `stroke-dasharray="${s.dash}"` : ''}/>`
+      ).join('');
+    }).join('');
+
+    /* Franjas verticales en los días sin registro: los huecos también son dato */
+    const huecos = d.serie.map((p, i) => p.registrado ? '' :
+      `<rect x="${(x(i) - 1.5).toFixed(1)}" y="${PT}" width="3" height="${H - PT - PB}"
+             fill="var(--text-4)" opacity="0.18"/>`).join('');
+
+    /* Marcas de entreno en la base */
+    const entrenos = d.serie.map((p, i) => !p.entreno ? '' :
+      `<circle cx="${x(i).toFixed(1)}" cy="${H - PB + 6}" r="2.5" fill="var(--brand)"/>`).join('');
+
+    /* La leyenda repite el trazo real de cada serie, no solo el color */
+    const leyenda = CRUCE_SERIES.map(s => `
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--text-3)">
+        <svg width="14" height="4" aria-hidden="true"><line x1="0" y1="2" x2="14" y2="2"
+             stroke="${s.color}" stroke-width="2" stroke-linecap="round"
+             ${s.dash ? `stroke-dasharray="${s.dash}"` : ''}/></svg>
+        ${s.etiqueta}
+      </span>`).join('');
+
+    const hallazgos = [
+      textoCorrelacion(d.correlaciones.sueno_energia,     'la energía', 'el sueño'),
+      textoCorrelacion(d.correlaciones.sueno_tareas,      'las tareas', 'el sueño'),
+      textoCorrelacion(d.correlaciones.energia_tareas,    'las tareas', 'la energía'),
+      textoCorrelacion(d.correlaciones.nutricion_energia, 'la energía', 'la nutrición')
+    ].filter(Boolean);
+
+    const bloqueHallazgos = hallazgos.length
+      ? `<div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
+           ${hallazgos.map(h => `
+             <div style="font-size:11px;color:var(--text-2);display:flex;gap:7px;align-items:flex-start">
+               <span style="color:var(--brand);flex-shrink:0">—</span><span>${h}</span>
+             </div>`).join('')}
+         </div>`
+      : `<div style="margin-top:12px;font-size:11px;color:var(--text-4)">
+           Todavía no hay patrones claros. Aparecen solos según acumules días.
+         </div>`;
+
+    el.innerHTML = `
+      <div class="card glass">
+        <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+          ${huecos}
+          <line x1="${PL}" y1="${H - PB}" x2="${W - PR}" y2="${H - PB}"
+                stroke="var(--text-4)" stroke-width="1" opacity="0.35"/>
+          ${lineas}
+          ${entrenos}
+        </svg>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px">${leyenda}</div>
+        <div style="font-size:10px;color:var(--text-4);margin-top:8px">
+          ${d.dias_registrados} de ${d.dias} días con registro · los puntos de abajo son entrenos
+        </div>
+        ${bloqueHallazgos}
+      </div>`;
+
+  } catch {
+    el.innerHTML = '<div class="empty-state">No se pudo cargar el cruce</div>';
+  }
+}
+
+/* ── 16a. SUEÑO EN DOS TOQUES ───────────────────────────────────── */
+/* El sueño automático no existe en una PWA: Health Connect y HealthKit son APIs
+   nativas. Si va a ser manual, que sea instantáneo — un toque en una franja,
+   no un formulario con teclado numérico. */
+const SUENO_OPCIONES = [
+  { h: 5,   etiqueta: '<5h'  },
+  { h: 6,   etiqueta: '6h'   },
+  { h: 7,   etiqueta: '7h'   },
+  { h: 7.5, etiqueta: '7½h'  },
+  { h: 8,   etiqueta: '8h'   },
+  { h: 9,   etiqueta: '9h+'  }
+];
+
+async function registrarSueno(horas) {
+  const fecha = currentViewISO();
+  try {
+    const res = await api('/logs', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ fecha, sueno: horas })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    toast(`Sueño: ${horas}h.`);
+    loadResumenDia(fecha);
+  } catch {
+    toast('No se pudo guardar', 'error');
+  }
+}
+
+function renderSuenoQuick(yaRegistrado) {
+  const el = document.getElementById('sueno-quick');
+  if (!el) return;
+  /* Ya hay dato: la card de arriba lo muestra, aquí sobra */
+  if (yaRegistrado) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="ct">¿CUÁNTO DORMISTE?</div>
+    <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+      ${SUENO_OPCIONES.map(o => `
+        <button class="bu" style="flex:1;min-width:52px;height:40px;font-size:12px;letter-spacing:0"
+                onclick="registrarSueno(${o.h})">${o.etiqueta}</button>`).join('')}
+    </div>`;
+}
+
+/* ── 16b. MISIÓN DIARIA (push) ──────────────────────────────────── */
+/* El navegador exige un gesto del usuario para pedir permiso, así que esto
+   solo se dispara desde el botón — nunca automáticamente al cargar. */
+
+function b64ToUint8(base64) {
+  const pad  = '='.repeat((4 - base64.length % 4) % 4);
+  const raw  = atob((base64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function pushDisponible() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+async function estadoMision() {
+  if (!(await pushDisponible())) return 'no-soportado';
+  if (Notification.permission === 'denied') return 'bloqueado';
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  return sub ? 'activa' : 'inactiva';
+}
+
+async function activarMision() {
+  if (!(await pushDisponible())) {
+    toast('Este navegador no admite avisos', 'error');
+    return;
+  }
+  try {
+    const permiso = await Notification.requestPermission();
+    if (permiso !== 'granted') {
+      toast('Permiso denegado', 'error');
+      return renderMisionCard();
+    }
+
+    const res = await api('/push/clave');
+    const { clave, activo } = await res.json();
+    if (!activo || !clave) {
+      toast('El servidor aún no tiene claves de aviso', 'error');
+      return renderMisionCard();
+    }
+
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: b64ToUint8(clave)
+    });
+
+    const r = await api('/push/suscribir', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        ...sub.toJSON(),
+        hora_aviso:  parseInt(localStorage.getItem('okiro_hora_aviso')  || '8',  10),
+        hora_cierre: parseInt(localStorage.getItem('okiro_hora_cierre') || '22', 10)
+      })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+
+    toast('Misión diaria activada.');
+  } catch (e) {
+    toast('No se pudo activar: ' + (e.message || e), 'error');
+  }
+  renderMisionCard();
+}
+
+async function desactivarMision() {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = await reg?.pushManager.getSubscription();
+    if (sub) {
+      await api('/push/baja', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ endpoint: sub.endpoint })
+      }).catch(() => {});
+      await sub.unsubscribe();
+    }
+    toast('Avisos desactivados.');
+  } catch { toast('No se pudo desactivar', 'error'); }
+  renderMisionCard();
+}
+
+async function cambiarHoraAviso(valor) {
+  localStorage.setItem('okiro_hora_aviso', valor);
+  if (await estadoMision() === 'activa') await activarMision();  // re-suscribe con la hora nueva
+}
+
+async function renderMisionCard() {
+  const el = document.getElementById('mision-card');
+  if (!el) return;
+  const estado = await estadoMision();
+  const hora   = localStorage.getItem('okiro_hora_aviso') || '8';
+
+  if (estado === 'no-soportado') { el.style.display = 'none'; return; }
+  el.style.display = '';
+
+  if (estado === 'bloqueado') {
+    el.innerHTML = `
+      <div class="ct">MISIÓN DIARIA</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">
+        Avisos bloqueados en los ajustes del navegador. Actívalos ahí para recibirlos.
+      </div>`;
+    return;
+  }
+
+  if (estado === 'activa') {
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div>
+          <div class="ct">MISIÓN DIARIA</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px">
+            Aviso a las ${String(hora).padStart(2, '0')}:00 si el día sigue en blanco
+          </div>
+        </div>
+        <button class="bu" style="width:auto;height:34px;padding:0 14px;font-size:11px"
+                onclick="desactivarMision()">DESACTIVAR</button>
+      </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:10px;color:var(--text-3);letter-spacing:1px">HORA</span>
+        <input type="range" min="5" max="12" value="${hora}" style="flex:1"
+               oninput="document.getElementById('mision-hora').textContent=this.value.padStart(2,'0')+':00'"
+               onchange="cambiarHoraAviso(this.value)">
+        <span id="mision-hora" class="hoy-streak-xp">${String(hora).padStart(2, '0')}:00</span>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <div class="ct">MISIÓN DIARIA</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px">
+          Que el sistema te avise si el día acaba sin registro
+        </div>
+      </div>
+      <button class="bs" style="width:auto;height:34px;padding:0 16px;font-size:11px"
+              onclick="activarMision()">ACTIVAR</button>
+    </div>`;
+}
+
 /* ── 17. INIT ───────────────────────────────────────────────────── */
 window.onload = async () => {
   /* Reloj */
@@ -734,6 +1053,9 @@ window.onload = async () => {
 
   /* Indicador de conexión */
   setupOfflineIndicator();
+
+  /* Card de misión diaria (no pide permiso: solo pinta el estado) */
+  renderMisionCard();
 
   /* Nota del día con debounce */
   setupNotaDebounce();

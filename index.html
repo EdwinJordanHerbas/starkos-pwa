@@ -143,6 +143,10 @@
     <div class="ct">Nota del día</div>
     <textarea class="hoy-nota" id="nota-dia" placeholder="Anotación del día..."></textarea>
    </div>
+   <!-- Sueño en dos toques (renderizado por JS, solo si falta el dato de hoy) -->
+   <div class="card glass" id="sueno-quick" style="display:none;margin-top:10px"></div>
+   <!-- Misión diaria — avisos push (renderizado por JS) -->
+   <div class="card glass" id="mision-card" style="display:none;margin-top:10px"></div>
    <!-- Coach IA — abre el panel de análisis (sec-ia) -->
    <div class="card glass" onclick="ss('ia')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-top:10px">
     <div>
@@ -225,7 +229,14 @@
 
   <!-- ── LOG ───────────────────────────────────────────── -->
   <div class="sec" id="sec-log">
-   <div class="stl">HISTORIAL</div>
+   <div class="stl">CRUCE DE DATOS</div>
+   <div class="cruce-rango">
+    <button class="cruce-btn active" data-dias="14" onclick="setRangoCruce(14, this)">14 D</button>
+    <button class="cruce-btn" data-dias="30" onclick="setRangoCruce(30, this)">30 D</button>
+    <button class="cruce-btn" data-dias="90" onclick="setRangoCruce(90, this)">90 D</button>
+   </div>
+   <div id="cruce"><div class="empty-state">Cargando...</div></div>
+   <div class="stl" style="margin-top:22px">HISTORIAL</div>
    <div id="hl"><div class="empty-state">Cargando...</div></div>
   </div>
 

@@ -114,6 +114,26 @@ CREATE TABLE IF NOT EXISTS comidas (
 
 CREATE INDEX IF NOT EXISTS comidas_fecha_idx ON comidas(fecha);
 
+-- ── SUSCRIPCIONES PUSH (misión diaria) ────────────────────────
+-- Un dispositivo = una fila. El endpoint es único por dispositivo/navegador.
+CREATE TABLE IF NOT EXISTS push_subs (
+  id          SERIAL PRIMARY KEY,
+  endpoint    TEXT UNIQUE NOT NULL,
+  p256dh      TEXT NOT NULL,
+  auth        TEXT NOT NULL,
+  hora_aviso  SMALLINT DEFAULT 8   CHECK (hora_aviso  >= 0 AND hora_aviso  <= 23),
+  hora_cierre SMALLINT DEFAULT 22  CHECK (hora_cierre >= 0 AND hora_cierre <= 23),
+  activa      BOOLEAN DEFAULT TRUE,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Marca qué avisos se han enviado ya, para no repetir si el cron corre dos veces
+CREATE TABLE IF NOT EXISTS push_enviados (
+  fecha DATE NOT NULL,
+  tipo  VARCHAR(20) NOT NULL,   -- 'mision' | 'cierre'
+  PRIMARY KEY (fecha, tipo)
+);
+
 -- ── PROYECTOS ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS proyectos (
   id            SERIAL PRIMARY KEY,

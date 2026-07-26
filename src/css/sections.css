@@ -1610,3 +1610,31 @@
   width:          100%;
   line-height:    1.3;
 }
+
+/* ── CRUCE DE DATOS ─────────────────────────────────────────────── */
+.cruce-rango {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.cruce-btn {
+  flex: 1;
+  height: 32px;
+  background: transparent;
+  border: none;
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.12);
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.cruce-btn.active {
+  color: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--brand);
+  background: rgba(139, 77, 255, 0.06);
+}
