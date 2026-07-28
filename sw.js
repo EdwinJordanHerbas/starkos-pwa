@@ -1,9 +1,9 @@
-// OkiroSport — Service Worker
+// OkiroSport â€” Service Worker
 // Estrategia:
-//  · Estáticos (css/js/iconos/fuentes): cache-first con actualización en segundo plano
-//  · Navegación (index.html): network-first con fallback a caché (offline)
-//  · API (/logs, /rutinas, ...): siempre red — nunca cachear datos
-const VERSION = 'okiro-v6.0.0';
+//  Â· EstÃ¡ticos (css/js/iconos/fuentes): cache-first con actualizaciÃ³n en segundo plano
+//  Â· NavegaciÃ³n (index.html): network-first con fallback a cachÃ© (offline)
+//  Â· API (/logs, /rutinas, ...): siempre red â€” nunca cachear datos
+const VERSION = 'okiro-v6.1.0';
 const STATIC_CACHE = `${VERSION}-static`;
 
 const PRECACHE = [
@@ -24,7 +24,7 @@ const PRECACHE = [
   '/icons/icon-512.png'
 ];
 
-// Rutas de API — nunca pasan por caché
+// Rutas de API â€” nunca pasan por cachÃ©
 const API_PREFIXES = ['/logs', '/proyectos', '/rutinas', '/ejercicios', '/sesiones',
                       '/nutricion', '/strava', '/notion', '/ia', '/auth', '/health',
                       '/resumen', '/push', '/cruce', '/party'];   // /resumen faltaba: se cacheaba el dashboard de HOY como si fuera estatico
@@ -32,7 +32,7 @@ const API_PREFIXES = ['/logs', '/proyectos', '/rutinas', '/ejercicios', '/sesion
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then(cache =>
-      /* {cache:'reload'} fuerza descarga fresca, ignorando la caché HTTP */
+      /* {cache:'reload'} fuerza descarga fresca, ignorando la cachÃ© HTTP */
       Promise.all(PRECACHE.map(url =>
         fetch(new Request(url, { cache: 'reload' }))
           .then(res => res.ok ? cache.put(url, res) : null)
@@ -52,11 +52,11 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// ── MISIÓN DIARIA (push) ──────────────────────────────────────────
-// El sistema avisa, no anima: título y cuerpo llegan ya redactados del backend.
+// â”€â”€ MISIÃ“N DIARIA (push) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// El sistema avisa, no anima: tÃ­tulo y cuerpo llegan ya redactados del backend.
 self.addEventListener('push', (event) => {
-  let d = { titulo: 'OKIRO', cuerpo: 'Misión diaria disponible.' };
-  try { d = { ...d, ...event.data.json() }; } catch { /* payload vacío: valores por defecto */ }
+  let d = { titulo: 'OKIRO', cuerpo: 'MisiÃ³n diaria disponible.' };
+  try { d = { ...d, ...event.data.json() }; } catch { /* payload vacÃ­o: valores por defecto */ }
   event.waitUntil(
     self.registration.showNotification(d.titulo, {
       body: d.cuerpo,
@@ -88,13 +88,13 @@ self.addEventListener('fetch', (event) => {
   // Solo GET; el resto (POST/PUT/DELETE) va directo a red
   if (event.request.method !== 'GET') return;
 
-  // API → siempre red (los datos nunca se sirven de caché)
+  // API â†’ siempre red (los datos nunca se sirven de cachÃ©)
   if (url.origin === location.origin &&
       API_PREFIXES.some(p => url.pathname === p || url.pathname.startsWith(p + '/'))) {
     return;
   }
 
-  // Navegación → network-first, fallback al index cacheado (modo offline)
+  // NavegaciÃ³n â†’ network-first, fallback al index cacheado (modo offline)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -108,7 +108,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Estáticos (mismo origen + Google Fonts) → cache-first con revalidación
+  // EstÃ¡ticos (mismo origen + Google Fonts) â†’ cache-first con revalidaciÃ³n
   event.respondWith(
     caches.match(event.request).then(cached => {
       const fetched = fetch(event.request)

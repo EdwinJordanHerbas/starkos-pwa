@@ -50,11 +50,15 @@ const CATEGORIAS = {
 /* ── 2. EL FIN DEL PROYECTO ─────────────────────────────────────── */
 /* Es el bloque que manda en la tarjeta: meta, dónde vas y cuánto falta. */
 function finHTML(p) {
-  if (p.es_padre) {
+  const metaV = Number(p.meta_valor);
+
+  // Un padre sin meta propia solo resume a sus hijos. Con meta propia se
+  // pinta como cualquier otro, más la nota de lo que engloba.
+  if (p.es_padre && !(metaV > 0)) {
     return `<div class="pm pm-padre">Resume ${p.hijos.length} proyecto${p.hijos.length === 1 ? '' : 's'}</div>`;
   }
-
-  const metaV = Number(p.meta_valor);
+  const nota = p.es_padre
+    ? `<div class="pm-engloba">y engloba ${p.hijos.length} proyectos</div>` : '';
   if (metaV > 0) {
     const actual = Number(p.valor_actual) || 0;
     const falta  = Math.max(0, metaV - actual);
@@ -64,14 +68,14 @@ function finHTML(p) {
   <div class="pm-cifra">
     <strong>${fmtNum(actual)}</strong> de ${fmtNum(metaV)} ${unidad}
     ${falta > 0 ? `<span class="pm-falta">faltan ${fmtNum(falta)}</span>` : '<span class="pm-hecho">meta alcanzada</span>'}
-  </div>
+  </div>${nota}
 </div>`;
   }
 
   if (p.meta) {
     // Fin declarado pero sin número: sirve de norte, no de medida.
     return `<div class="pm"><div class="pm-meta">${esc(p.meta)}</div>
-      <div class="pm-cifra pm-sincifra">sin cifra que medir</div></div>`;
+      <div class="pm-cifra pm-sincifra">sin cifra que medir</div>${nota}</div>`;
   }
 
   return `<button class="pm pm-vacia" onclick="updP(${p.id})">
@@ -285,7 +289,8 @@ function updP(id) {
   // El slider manual solo tiene sentido sin meta numérica y sin hijos:
   // en los demás casos el progreso es un cálculo, no una opinión.
   const manual = document.getElementById('ep-manual');
-  const usaCalculo = p.es_padre || Number(p.meta_valor) > 0;
+  const metaPropia = Number(p.meta_valor) > 0;
+  const usaCalculo = p.es_padre || metaPropia;
   if (manual) manual.style.display = usaCalculo ? 'none' : 'block';
   const progInput = document.getElementById('ep-prog');
   const progVal   = document.getElementById('ep-prog-val');
@@ -295,14 +300,10 @@ function updP(id) {
   const calc = document.getElementById('ep-calculado');
   if (calc) {
     calc.style.display = usaCalculo ? 'block' : 'none';
-    calc.textContent = p.es_padre
-      ? `Progreso calculado: media de sus ${p.hijos.length} proyectos (${p.progreso_real}%)`
-      : `Progreso calculado desde la meta: ${p.progreso_real}%`;
+    calc.textContent = metaPropia
+      ? `Progreso calculado desde la meta: ${p.progreso_real}%`
+      : `Progreso calculado: media de sus ${p.hijos.length} proyectos (${p.progreso_real}%). Si le pones meta propia, mandará la meta.`;
   }
-
-  // El padre no se edita a mano: sus cifras salen de los hijos.
-  const bloqueMeta = document.getElementById('ep-bloque-meta');
-  if (bloqueMeta) bloqueMeta.style.display = p.es_padre ? 'none' : 'block';
 
   cargarHistorial(id);
 

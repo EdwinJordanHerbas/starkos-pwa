@@ -330,9 +330,13 @@ function decorarProyectos(rows) {
   const ahora = Date.now();
   return rows.map(p => {
     const hijos = hijosDe.get(p.id) || [];
+    // Un padre con meta propia se mide por SU meta, no por la media de lo que
+    // engloba: NeumorStudio va a 5 clientes, y eso no es el promedio de cómo
+    // van las webs que firma. Sin meta propia, sí resume a sus hijos.
+    const metaPropia = Number(p.meta_valor) > 0;
     return {
       ...p,
-      progreso_real: hijos.length
+      progreso_real: (hijos.length && !metaPropia)
         ? Math.round(hijos.reduce((a, h) => a + progresoHoja(h), 0) / hijos.length)
         : progresoHoja(p),
       es_padre:      hijos.length > 0,

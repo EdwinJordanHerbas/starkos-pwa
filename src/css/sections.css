@@ -1193,6 +1193,7 @@
 }
 
 .pm-falta     { color: var(--text-4); margin-left: 6px; }
+.pm-engloba   { font-family: var(--font-sans); font-size: 9px; color: var(--text-4); margin-top: 4px; }
 .pm-hecho     { color: var(--success); margin-left: 6px; }
 .pm-sincifra  { color: var(--text-4); font-style: italic; }
 .pm-padre     { font-family: var(--font-sans); font-size: 10px; color: var(--text-4); }
