@@ -272,6 +272,23 @@
   <div class="sec" id="sec-proyectos">
    <div class="stl">PROYECTOS</div>
    <div id="pl"><div class="empty-state">Cargando...</div></div>
+
+   <!-- Puente hacia Notion: los datos se rellenan aquí, Notion los enseña -->
+   <div class="stl" style="margin-top:24px">PUENTE CON NOTION</div>
+   <div class="notion-estado" id="notion-estado">Comprobando...</div>
+   <button class="bs np-toggle-btn" onclick="toggleNotionBox()">CONFIGURAR</button>
+   <div id="notion-form" class="np-form">
+    <div class="form-field" style="margin-bottom:8px">
+     <label>Token de la integración <span class="lbl-hint">notion.so/my-integrations</span></label>
+     <input type="password" id="nt-token" placeholder="ntn_..." autocomplete="off">
+    </div>
+    <div class="form-field" style="margin-bottom:12px">
+     <label>Página donde crear la base <span class="lbl-hint">compártela con la integración</span></label>
+     <input type="text" id="nt-pagina" placeholder="Pega aquí el enlace de la página">
+    </div>
+    <button class="bs" onclick="notionConectar()" style="margin-bottom:6px">CONECTAR Y CREAR LA BASE</button>
+    <button class="bu" onclick="notionSync()" style="width:100%">ENVIAR PROYECTOS AHORA</button>
+   </div>
   </div>
 
   <!-- ── IA ────────────────────────────────────────────── -->

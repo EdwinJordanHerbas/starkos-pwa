@@ -416,6 +416,7 @@ app.post('/proyectos', async (req, res) => {
         'Proyecto creado'
       ]
     );
+    notionPushDiferido();
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -457,6 +458,7 @@ app.put('/proyectos/:id', async (req, res) => {
          rows[0].progreso ?? null, rows[0].valor_actual ?? null]
       ).catch(e => console.error('historial proyecto:', e.message));
     }
+    notionPushDiferido();
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -692,16 +694,206 @@ app.get('/strava/actividades', async (req, res) => {
 // ════════════════════════════════════════════════════════
 // NOTION
 // ════════════════════════════════════════════════════════
+// El sentido del puente es este: los datos se rellenan en OKIRO y Notion
+// los enseña. Notion aporta lo que una PWA no da (tablero, timeline,
+// agrupaciones); OKIRO aporta lo que Notion no puede (el cruce con sueño,
+// entreno y nutrición). Por eso el flujo es de salida: OKIRO → Notion.
+const NOTION_API = 'https://api.notion.com/v1';
+const NOTION_VER = '2022-06-28';
+
+async function cfgGet(claves) {
+  const { rows } = await db('SELECT clave, valor FROM config WHERE clave = ANY($1)', [claves]);
+  return Object.fromEntries(rows.map(r => [r.clave, r.valor]));
+}
+
+async function cfgSet(clave, valor) {
+  await db(
+    `INSERT INTO config (clave, valor) VALUES ($1,$2)
+     ON CONFLICT (clave) DO UPDATE SET valor=$2`, [clave, valor]);
+}
+
+async function notionFetch(path, method = 'GET', body = null, token = null) {
+  const tk = token || (await cfgGet(['notion_token'])).notion_token;
+  if (!tk) throw Object.assign(new Error('Notion no configurado'), { status: 503 });
+
+  const r = await fetch(NOTION_API + path, {
+    method,
+    headers: {
+      Authorization:    `Bearer ${tk}`,
+      'Notion-Version': NOTION_VER,
+      'Content-Type':   'application/json'
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    throw Object.assign(new Error(data.message || `Notion respondió ${r.status}`), { status: r.status });
+  }
+  return data;
+}
+
+// De una URL de Notion (o de un id pelado) al UUID con guiones que pide la API.
+function notionId(entrada) {
+  const hex = String(entrada || '').replace(/-/g, '').match(/[0-9a-fA-F]{32}/);
+  if (!hex) return null;
+  const h = hex[0];
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
+const rango = pr => (pr <= 20 ? 'D' : pr <= 40 ? 'C' : pr <= 60 ? 'B' : pr <= 80 ? 'A' : 'S');
+
 app.post('/notion/config', async (req, res) => {
   const { token, database_id } = req.body;
   if (!token) return res.status(400).json({ error: 'Token requerido' });
   try {
-    await db(`INSERT INTO config (clave, valor) VALUES ('notion_token',$1) ON CONFLICT (clave) DO UPDATE SET valor=$1`, [token]);
-    if (database_id)
-      await db(`INSERT INTO config (clave, valor) VALUES ('notion_db',$1) ON CONFLICT (clave) DO UPDATE SET valor=$1`, [database_id]);
+    await cfgSet('notion_token', token);
+    if (database_id) await cfgSet('notion_db', database_id);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+app.get('/notion/estado', async (req, res) => {
+  try {
+    const c = await cfgGet(['notion_token', 'notion_db_proyectos', 'notion_ultimo_push']);
+    res.json({
+      conectado:    !!c.notion_token,
+      base_creada:  !!c.notion_db_proyectos,
+      ultimo_push:  c.notion_ultimo_push || null
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Crea la base en Notion con el esquema correcto, dentro de una página que el
+// usuario haya compartido con la integración. Así no hay que montar a mano
+// diez propiedades ni acertar con los nombres exactos.
+app.post('/notion/setup', async (req, res) => {
+  const parent = notionId(req.body?.pagina);
+  if (!parent) return res.status(400).json({ error: 'Pega el enlace de la página de Notion donde crear la base' });
+
+  try {
+    const base = await notionFetch('/databases', 'POST', {
+      parent: { type: 'page_id', page_id: parent },
+      title:  [{ type: 'text', text: { content: 'OKIRO · Proyectos' } }],
+      properties: {
+        'Proyecto':       { title: {} },
+        'De qué va':      { rich_text: {} },
+        'Meta':           { rich_text: {} },
+        // Notion pinta el porcentaje sobre 1, así que se envía progreso/100.
+        'Progreso':       { number: { format: 'percent' } },
+        'Voy por':        { number: {} },
+        'Meta valor':     { number: {} },
+        'Unidad':         { rich_text: {} },
+        'Categoría':      { select: {} },
+        'Cuelga de':      { select: {} },
+        'Rango':          { select: { options: [
+                              { name: 'D', color: 'gray'   },
+                              { name: 'C', color: 'purple' },
+                              { name: 'B', color: 'blue'   },
+                              { name: 'A', color: 'green'  },
+                              { name: 'S', color: 'yellow' }
+                            ] } },
+        'Última acción':  { rich_text: {} },
+        'Días sin tocar': { number: {} },
+        'Actualizado':    { date: {} },
+        'ID OKIRO':       { number: {} }
+      }
+    });
+
+    await cfgSet('notion_db_proyectos', base.id);
+    // Una base recién creada no tiene páginas viejas que reutilizar.
+    await db('UPDATE proyectos SET notion_page_id = NULL');
+    res.json({ ok: true, database_id: base.id, url: base.url });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// Vuelca los proyectos a Notion: crea la página la primera vez y la actualiza
+// las siguientes. Nunca borra en Notion — si allí sobra algo, se quita a mano.
+async function notionPush() {
+  const c = await cfgGet(['notion_token', 'notion_db_proyectos']);
+  if (!c.notion_token)        throw Object.assign(new Error('Notion no configurado'), { status: 503 });
+  if (!c.notion_db_proyectos) throw Object.assign(new Error('Falta crear la base en Notion'), { status: 400 });
+
+  const { rows } = await db('SELECT * FROM proyectos ORDER BY id');
+  const proyectos = decorarProyectos(rows);
+  const nombrePorId = new Map(rows.map(p => [p.id, p.nombre]));
+
+  const texto = v => (v ? [{ type: 'text', text: { content: String(v).slice(0, 1900) } }] : []);
+  const sel   = v => (v ? { name: String(v).slice(0, 90) } : null);
+  const num   = v => (v === null || v === undefined || v === '' ? null : Number(v));
+
+  let creados = 0, actualizados = 0;
+  const errores = [];
+
+  for (const p of proyectos) {
+    const props = {
+      'Proyecto':       { title: texto(p.nombre) },
+      'De qué va':      { rich_text: texto(p.objetivo) },
+      'Meta':           { rich_text: texto(p.meta) },
+      'Progreso':       { number: (p.progreso_real ?? 0) / 100 },
+      'Voy por':        { number: num(p.valor_actual) },
+      'Meta valor':     { number: num(p.meta_valor) },
+      'Unidad':         { rich_text: texto(p.metrica) },
+      'Categoría':      { select: sel(p.categoria) },
+      'Cuelga de':      { select: sel(p.padre_id ? nombrePorId.get(p.padre_id) : null) },
+      'Rango':          { select: sel(rango(p.progreso_real ?? 0)) },
+      'Última acción':  { rich_text: texto(p.ultima_accion) },
+      'Días sin tocar': { number: num(p.dias_inactivo) },
+      'Actualizado':    { date: p.updated_at ? { start: new Date(p.updated_at).toISOString() } : null },
+      'ID OKIRO':       { number: p.id }
+    };
+
+    try {
+      if (p.notion_page_id) {
+        await notionFetch(`/pages/${p.notion_page_id}`, 'PATCH', { properties: props }, c.notion_token);
+        actualizados++;
+      } else {
+        const pagina = await notionFetch('/pages', 'POST', {
+          parent: { database_id: c.notion_db_proyectos },
+          properties: props
+        }, c.notion_token);
+        await db('UPDATE proyectos SET notion_page_id=$1 WHERE id=$2', [pagina.id, p.id]);
+        creados++;
+      }
+    } catch (e) {
+      // Si una página se borró en Notion, se olvida el enlace y la próxima
+      // vuelta la recrea en vez de fallar para siempre.
+      if (e.status === 404 && p.notion_page_id) {
+        await db('UPDATE proyectos SET notion_page_id=NULL WHERE id=$1', [p.id]);
+      }
+      errores.push(`${p.nombre}: ${e.message}`);
+    }
+    // Notion limita a ~3 peticiones por segundo.
+    await new Promise(r => setTimeout(r, 350));
+  }
+
+  await cfgSet('notion_ultimo_push', new Date().toISOString());
+  return { creados, actualizados, errores };
+}
+
+app.post('/notion/push', async (req, res) => {
+  try {
+    res.json(await notionPush());
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// Tras editar un proyecto, Notion se actualiza solo unos segundos después.
+// El retardo agrupa varias ediciones seguidas en un único envío y, sobre todo,
+// evita que guardar en la app tenga que esperar a la API de Notion.
+let _pushTimer = null;
+function notionPushDiferido() {
+  if (_pushTimer) clearTimeout(_pushTimer);
+  _pushTimer = setTimeout(() => {
+    _pushTimer = null;
+    notionPush().catch(e => {
+      // Sin Notion configurado esto no es un error: es el estado normal.
+      if (e.status !== 503 && e.status !== 400) console.error('Notion push:', e.message);
+    });
+  }, 5000);
+}
 
 app.get('/notion/sync', async (req, res) => {
   try {

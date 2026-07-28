@@ -30,7 +30,7 @@ cp -r "$SRC/assets" /opt/pwa/assets
 
 echo ">> Migraciones de base de datos (idempotentes)"
 if docker ps --format '{{.Names}}' | grep -q '^postgres$'; then
-  for M in migration.sql migration-v5.sql migration-v6.sql; do
+  for M in migration.sql migration-v5.sql migration-v6.sql migration-v7.sql; do
     docker exec -i postgres psql -U postgres -d starkos < "$SRC/$M" >/dev/null 2>&1 \
       && echo "   $M aplicada" \
       || echo "   !! $M fallo (no bloqueante) - revisa a mano"
@@ -67,14 +67,16 @@ docker exec backend sh -c 'cd /app && npm install --no-audit --no-fund web-push 
 echo ">> Reiniciar contenedor backend"
 docker restart backend
 
-echo ">> Cron: mision diaria (cada hora) + sync de Notion (una vez al dia)"
+echo ">> Cron: mision diaria (cada hora) + respaldo del envio a Notion"
 CRON_TICK='0 * * * * curl -fsS -X POST http://127.0.0.1:3000/push/tick >/dev/null 2>&1'
-CRON_NOTION='15 5 * * * curl -fsS -H "Authorization: Bearer $(cat /opt/backend/.secrets/app_token 2>/dev/null)" http://127.0.0.1:3000/notion/sync >/dev/null 2>&1'
+# El envio a Notion ya se dispara solo al editar un proyecto: este cron es la
+# red de seguridad por si el backend se reinicio con un envio pendiente.
+CRON_NOTION='15 5 * * * curl -fsS -X POST -H "Authorization: Bearer $(cat /opt/backend/.secrets/app_token 2>/dev/null)" http://127.0.0.1:3000/notion/push >/dev/null 2>&1'
 # `|| true` es obligatorio: sin crontab previo, `crontab -l` sale con codigo 1 y
 # `set -e` mataba el subshell entero en silencio, dejando el cron sin instalar.
 ACTUAL="$(crontab -l 2>/dev/null || true)"
 {
-  printf '%s\n' "$ACTUAL" | grep -v 'push/tick' | grep -v 'notion/sync' | grep -v '^$' || true
+  printf '%s\n' "$ACTUAL" | grep -v 'push/tick' | grep -v 'notion/sync' | grep -v 'notion/push' | grep -v '^$' || true
   echo "$CRON_TICK"
   echo "$CRON_NOTION"
 } | crontab -
