@@ -1205,6 +1205,42 @@
 
 .notion-medio { color: var(--warning); }
 .notion-ok    { color: var(--success); }
+
+/* El enlace a la base se pinta como botón, pero es un <a> */
+.nt-abrir {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  margin-top:      6px;
+  text-decoration: none;
+}
+
+.nt-abrir[hidden] { display: none; }
+
+/* Crear la base es de una sola vez: se pliega para no pulsarla por error */
+.nt-mas {
+  font-family:     var(--font-sans);
+  font-size:       10px;
+  color:           var(--text-4);
+  text-align:      center;
+  padding:         14px 0 4px;
+  cursor:          pointer;
+  text-decoration: underline;
+}
+
+.nt-base      { display: none; padding-top: 8px; }
+.nt-base.open { display: block; }
+
+.nt-aviso {
+  font-family:   var(--font-sans);
+  font-size:     10px;
+  line-height:   1.5;
+  color:         var(--warning);
+  background:    rgba(224, 164, 43, 0.08);
+  border-radius: var(--radius-sm);
+  padding:       8px 10px;
+  margin-bottom: 12px;
+}
 .pm-hecho     { color: var(--success); margin-left: 6px; }
 .pm-sincifra  { color: var(--text-4); font-style: italic; }
 .pm-padre     { font-family: var(--font-sans); font-size: 10px; color: var(--text-4); }

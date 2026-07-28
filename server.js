@@ -742,23 +742,64 @@ function notionId(entrada) {
 
 const rango = pr => (pr <= 20 ? 'D' : pr <= 40 ? 'C' : pr <= 60 ? 'B' : pr <= 80 ? 'A' : 'S');
 
+// Guardar el token es lo que se hace al rotarlo, y entonces la base ya existe:
+// por eso esta ruta nunca crea nada. Comprueba el token antes de guardarlo —un
+// token muerto guardado en silencio deja el puente roto sin que se note— y de
+// paso mira si sigue viendo la base, que es lo único que puede fallar al rotar.
 app.post('/notion/config', async (req, res) => {
   const { token, database_id } = req.body;
   if (!token) return res.status(400).json({ error: 'Token requerido' });
+
   try {
+    const yo = await notionFetch('/users/me', 'GET', null, token);
+
     await cfgSet('notion_token', token);
-    if (database_id) await cfgSet('notion_db', database_id);
-    res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+
+    // Enlazar una base existente por su URL es la otra forma de no crear otra.
+    const nueva = database_id ? notionId(database_id) : null;
+    if (database_id && !nueva) return res.status(400).json({ error: 'Ese enlace no lleva a una base de Notion' });
+    if (nueva) {
+      await notionFetch(`/databases/${nueva}`, 'GET', null, token);
+      await cfgSet('notion_db_proyectos', nueva);
+      await cfgSet('notion_db_url', '');
+    }
+
+    const base = nueva || (await cfgGet(['notion_db_proyectos'])).notion_db_proyectos;
+    let base_ok = null;
+    if (base) {
+      base_ok = await notionFetch(`/databases/${base}`, 'GET', null, token).then(() => true).catch(() => false);
+    }
+
+    res.json({ ok: true, integracion: yo.name || yo.bot?.owner?.type || 'integración', base_creada: !!base, base_ok });
+  } catch (e) {
+    const msg = e.status === 401
+      ? 'Notion rechaza ese token. Copia el de notion.so/my-integrations entero, empieza por ntn_'
+      : e.message;
+    res.status(e.status || 500).json({ error: msg });
+  }
 });
 
 app.get('/notion/estado', async (req, res) => {
   try {
-    const c = await cfgGet(['notion_token', 'notion_db_proyectos', 'notion_ultimo_push']);
+    const c = await cfgGet(['notion_token', 'notion_db_proyectos', 'notion_ultimo_push', 'notion_db_url']);
+    const { rows: [n] } = await db(
+      'SELECT count(*) FILTER (WHERE notion_page_id IS NOT NULL) AS enlazados, count(*) AS total FROM proyectos');
+
+    // La URL de la base solo se pide una vez y se guarda: sirve para el botón
+    // de abrirla, y no merece una llamada a Notion cada vez que se pinta.
+    let url = c.notion_db_url || null;
+    if (!url && c.notion_token && c.notion_db_proyectos) {
+      url = await notionFetch(`/databases/${c.notion_db_proyectos}`).then(b => b.url).catch(() => null);
+      if (url) await cfgSet('notion_db_url', url);
+    }
+
     res.json({
       conectado:    !!c.notion_token,
       base_creada:  !!c.notion_db_proyectos,
-      ultimo_push:  c.notion_ultimo_push || null
+      ultimo_push:  c.notion_ultimo_push || null,
+      url,
+      enlazados:    Number(n.enlazados),
+      total:        Number(n.total)
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -800,6 +841,7 @@ app.post('/notion/setup', async (req, res) => {
     });
 
     await cfgSet('notion_db_proyectos', base.id);
+    await cfgSet('notion_db_url', base.url || '');
     // Una base recién creada no tiene páginas viejas que reutilizar.
     await db('UPDATE proyectos SET notion_page_id = NULL');
     res.json({ ok: true, database_id: base.id, url: base.url });
@@ -897,10 +939,14 @@ function notionPushDiferido() {
 
 app.get('/notion/sync', async (req, res) => {
   try {
-    const { rows } = await db("SELECT clave, valor FROM config WHERE clave IN ('notion_token','notion_db')");
+    const { rows } = await db("SELECT clave, valor FROM config WHERE clave IN ('notion_token','notion_db','notion_db_proyectos')");
     const cfg = Object.fromEntries(rows.map(r => [r.clave, r.valor]));
     if (!cfg.notion_token) return res.status(503).json({ error: 'Notion no configurado' });
-    const r = await fetch(`https://api.notion.com/v1/databases/${cfg.notion_db}/query`, {
+    // `notion_db` es de la versión vieja y nadie la rellena ya: la base buena
+    // es la que crea /notion/setup.
+    const baseSync = cfg.notion_db || cfg.notion_db_proyectos;
+    if (!baseSync) return res.status(400).json({ error: 'Falta crear la base en Notion' });
+    const r = await fetch(`https://api.notion.com/v1/databases/${baseSync}/query`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${cfg.notion_token}`,

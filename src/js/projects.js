@@ -207,12 +207,23 @@ function toggleNotionBox() {
   document.getElementById('notion-form')?.classList.toggle('open');
 }
 
+function toggleNotionBase() {
+  document.getElementById('notion-base')?.classList.toggle('open');
+}
+
 async function notionEstado() {
   const el = document.getElementById('notion-estado');
   if (!el) return;
+  const abrir = document.getElementById('nt-abrir');
   try {
     const res = await api('/notion/estado');
     const e   = await res.json();
+
+    if (abrir) {
+      abrir.hidden = !e.url;
+      if (e.url) abrir.href = e.url;
+    }
+
     if (!e.conectado) {
       el.textContent = 'Sin conectar';
       el.className   = 'notion-estado';
@@ -226,7 +237,7 @@ async function notionEstado() {
     const cuando = e.ultimo_push
       ? new Date(e.ultimo_push).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
       : 'nunca';
-    el.textContent = `Conectado · último envío: ${cuando}`;
+    el.textContent = `Conectado · ${e.enlazados}/${e.total} en Notion · último envío: ${cuando}`;
     el.className   = 'notion-estado notion-ok';
   } catch {
     el.textContent = 'No se pudo comprobar';
@@ -234,25 +245,45 @@ async function notionEstado() {
   }
 }
 
-async function notionConectar() {
-  const token  = document.getElementById('nt-token')?.value.trim() || '';
-  const pagina = document.getElementById('nt-pagina')?.value.trim() || '';
-  if (!token)  { toast('Pega el token de la integración', 'error'); return; }
-  if (!pagina) { toast('Pega el enlace de la página de Notion', 'error'); return; }
+/* Rotar el token es lo normal y la base ya existe: guardar el token no crea
+   ni toca nada allí. El servidor lo prueba contra Notion antes de guardarlo. */
+async function notionGuardarToken() {
+  const campo = document.getElementById('nt-token');
+  const token = campo?.value.trim() || '';
+  if (!token) { toast('Pega el token de la integración', 'error'); return; }
 
   try {
-    let res = await api('/notion/config', {
+    toast('Comprobando el token...');
+    const res  = await api('/notion/config', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ token })
     });
-    if (!res.ok) throw new Error('No se pudo guardar el token');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'No se pudo guardar el token');
 
     // El token ya está en el servidor: se borra del formulario en cuanto viaja.
-    const tk = document.getElementById('nt-token'); if (tk) tk.value = '';
+    if (campo) campo.value = '';
 
+    if (data.base_creada && !data.base_ok) {
+      toast('Token guardado, pero no ve la base: dale acceso en Notion', 'error');
+    } else {
+      toast('Token guardado y funcionando');
+    }
+    notionEstado();
+  } catch (e) {
+    toast(e.message || 'Error guardando el token', 'error');
+  }
+}
+
+/* Solo para la primera vez, o si se quiere empezar de cero en otra página. */
+async function notionCrearBase() {
+  const pagina = document.getElementById('nt-pagina')?.value.trim() || '';
+  if (!pagina) { toast('Pega el enlace de la página de Notion', 'error'); return; }
+
+  try {
     toast('Creando la base en Notion...');
-    res = await api('/notion/setup', {
+    const res  = await api('/notion/setup', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ pagina })
@@ -263,7 +294,7 @@ async function notionConectar() {
     toast('Base creada en Notion');
     await notionSync();
   } catch (e) {
-    toast(e.message || 'Error conectando con Notion', 'error');
+    toast(e.message || 'Error creando la base', 'error');
   }
 }
 
