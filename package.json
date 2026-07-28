@@ -1,6 +1,6 @@
 {
   "name": "okiro",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "OKIRO — levántate. Sistema de rendimiento (PWA + backend)",
   "main": "server.js",
   "scripts": {

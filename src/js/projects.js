@@ -1,9 +1,15 @@
 // OkiroSport — Lógica de Proyectos
+//
+// La pantalla se ordena alrededor del FIN de cada proyecto, no de su estado:
+// lo primero que se lee es a dónde va y cuánto le falta. Lo que no tiene fin
+// declarado se marca, porque sin meta no hay forma de saber si avanza.
+// Los trabajos de cliente cuelgan de la marca que los firma (padre_id).
 
 /* ── ESTADO ─────────────────────────────────────────────────────── */
 let _editProjId = null;
+let _proyectos  = [];   // último GET, para poblar el modal sin volver a pedir
 
-/* ── 1. RANGO ───────────────────────────────────────────────────── */
+/* ── 1. RANGO Y FORMATO ─────────────────────────────────────────── */
 function getRank(progreso) {
   if (progreso <= 20) return ['D', 'rank-d'];
   if (progreso <= 40) return ['C', 'rank-c'];
@@ -12,13 +18,103 @@ function getRank(progreso) {
   return ['S', 'rank-s'];
 }
 
-/* ── 2. CARGAR ──────────────────────────────────────────────────── */
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+/* 10000 → "10.000"; 3.5 → "3,5" (formato español, sin decimales inútiles) */
+function fmtNum(n) {
+  const v = Number(n);
+  if (!isFinite(v)) return '—';
+  return v.toLocaleString('es-ES', { maximumFractionDigits: 2 });
+}
+
+/* "hace 3 días" a partir de updated_at */
+function fmtInactivo(dias) {
+  if (dias === null || dias === undefined) return '';
+  if (dias <= 0) return 'hoy';
+  if (dias === 1) return 'ayer';
+  if (dias < 30)  return `hace ${dias} días`;
+  const meses = Math.floor(dias / 30);
+  return meses === 1 ? 'hace 1 mes' : `hace ${meses} meses`;
+}
+
+const CATEGORIAS = {
+  negocio:     'Negocio',
+  fisico:      'Físico',
+  aprendizaje: 'Aprendizaje',
+  personal:    'Personal'
+};
+
+/* ── 2. EL FIN DEL PROYECTO ─────────────────────────────────────── */
+/* Es el bloque que manda en la tarjeta: meta, dónde vas y cuánto falta. */
+function finHTML(p) {
+  if (p.es_padre) {
+    return `<div class="pm pm-padre">Resume ${p.hijos.length} proyecto${p.hijos.length === 1 ? '' : 's'}</div>`;
+  }
+
+  const metaV = Number(p.meta_valor);
+  if (metaV > 0) {
+    const actual = Number(p.valor_actual) || 0;
+    const falta  = Math.max(0, metaV - actual);
+    const unidad = esc(p.metrica || '');
+    return `<div class="pm">
+  <div class="pm-meta">${esc(p.meta || 'Meta')}</div>
+  <div class="pm-cifra">
+    <strong>${fmtNum(actual)}</strong> de ${fmtNum(metaV)} ${unidad}
+    ${falta > 0 ? `<span class="pm-falta">faltan ${fmtNum(falta)}</span>` : '<span class="pm-hecho">meta alcanzada</span>'}
+  </div>
+</div>`;
+  }
+
+  if (p.meta) {
+    // Fin declarado pero sin número: sirve de norte, no de medida.
+    return `<div class="pm"><div class="pm-meta">${esc(p.meta)}</div>
+      <div class="pm-cifra pm-sincifra">sin cifra que medir</div></div>`;
+  }
+
+  return `<button class="pm pm-vacia" onclick="updP(${p.id})">
+    SIN FIN DEFINIDO · ponle una meta</button>`;
+}
+
+/* ── 3. TARJETA ─────────────────────────────────────────────────── */
+function cardHTML(p, esHijo = false) {
+  const prog = p.progreso_real ?? p.progreso ?? 0;
+  const [label, cls] = getRank(prog);
+  const cat = p.categoria ? `<span class="pc-cat">${esc(CATEGORIAS[p.categoria] || p.categoria)}</span>` : '';
+  const inactivo = fmtInactivo(p.dias_inactivo);
+  const alerta   = p.dias_inactivo >= 30 && !p.es_padre ? ' pc-parado' : '';
+
+  return `<div class="pc${esHijo ? ' pc-hijo' : ''}${alerta}">
+  <div class="pc-header">
+    <span class="rank-badge ${cls}">${label}</span>
+    <div class="pc-head-right">
+      ${cat}
+      <span class="pc-dias">${inactivo}</span>
+      <button class="proj-del-btn" data-id="${p.id}" data-nombre="${esc(p.nombre)}"
+              onclick="deleteP(+this.dataset.id, this.dataset.nombre)"
+              title="Eliminar proyecto">${OKICON.cross}</button>
+    </div>
+  </div>
+  <div class="pp">${esc(p.nombre)}</div>
+  ${p.objetivo ? `<div class="po">${esc(p.objetivo)}</div>` : ''}
+  ${finHTML(p)}
+  <div class="ph"><div class="pf" style="width:${prog}%"></div></div>
+  <div class="pc-bottom">
+    <span class="pi">${p.ultima_accion ? esc(p.ultima_accion) : 'sin acciones registradas'}</span>
+    <span class="pc-pct">${prog}%</span>
+  </div>
+  <button onclick="updP(${p.id})" class="bu pc-btn">ACTUALIZAR</button>
+</div>`;
+}
+
+/* ── 4. CARGAR ──────────────────────────────────────────────────── */
 async function loadP() {
   const pl = document.getElementById('pl');
   if (!pl) return;
   pl.innerHTML = '<div class="empty-state">Cargando...</div>';
 
-  /* Formulario de nuevo proyecto (siempre presente) */
   const formHTML = `
 <button class="bs np-toggle-btn" onclick="toggleNewProjForm()">+ NUEVO PROYECTO</button>
 <div id="new-proj-form" class="np-form">
@@ -27,9 +123,36 @@ async function loadP() {
     <label>Nombre</label>
     <input type="text" id="np-nombre" placeholder="Nombre del proyecto...">
   </div>
-  <div class="form-field" style="margin-bottom:12px">
-    <label>Descripción (opcional)</label>
-    <textarea id="np-desc" placeholder="¿De qué va?" style="min-height:56px"></textarea>
+  <div class="form-field" style="margin-bottom:8px">
+    <label>¿De qué va?</label>
+    <textarea id="np-desc" placeholder="Una línea" style="min-height:48px"></textarea>
+  </div>
+  <div class="form-field" style="margin-bottom:8px">
+    <label>¿A qué fin? <span class="lbl-hint">lo que lo hace medible</span></label>
+    <input type="text" id="np-meta" placeholder="Ej: facturar 10.000 €/mes">
+  </div>
+  <div class="np-row">
+    <div class="form-field">
+      <label>Meta</label>
+      <input type="number" id="np-meta-valor" placeholder="10000" inputmode="decimal">
+    </div>
+    <div class="form-field">
+      <label>Unidad</label>
+      <input type="text" id="np-metrica" placeholder="€/mes">
+    </div>
+  </div>
+  <div class="np-row" style="margin-bottom:12px">
+    <div class="form-field">
+      <label>Categoría</label>
+      <select id="np-categoria">
+        <option value="">—</option>
+        ${Object.entries(CATEGORIAS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-field">
+      <label>Cuelga de</label>
+      <select id="np-padre"><option value="">Nada (independiente)</option></select>
+    </div>
   </div>
   <button class="bs" onclick="createP()" style="margin-bottom:6px">CREAR PROYECTO</button>
   <button onclick="toggleNewProjForm()" style="width:100%;padding:10px;background:none;border:none;color:var(--text-3);font-family:var(--font-sans);font-size:.6rem;cursor:pointer">CANCELAR</button>
@@ -38,71 +161,99 @@ async function loadP() {
   try {
     const res  = await api('/proyectos');
     const data = await res.json();
+    _proyectos = Array.isArray(data) ? data : [];
 
-    if (!Array.isArray(data) || !data.length) {
+    if (!_proyectos.length) {
       pl.innerHTML = formHTML + '<div class="empty-state">Sin proyectos activos</div>';
+      rellenaSelectPadres();
       return;
     }
 
-    pl.innerHTML = formHTML + data.map(p => {
-      const [label, cls] = getRank(p.progreso ?? 0);
-      /* Escapa el nombre para data-attr */
-      const nombreEsc = (p.nombre || '').replace(/"/g, '&quot;');
-      return `<div class="pc">
-  <div class="pc-header">
-    <span class="rank-badge ${cls}">${label}</span>
-    <button class="proj-del-btn" data-id="${p.id}" data-nombre="${nombreEsc}"
-            onclick="deleteP(+this.dataset.id, this.dataset.nombre)"
-            title="Eliminar proyecto">${OKICON.cross}</button>
-  </div>
-  <div class="pp">${p.nombre || ''}</div>
-  <div class="po">${p.objetivo || ''}</div>
-  <div class="ph"><div class="pf" style="width:${p.progreso ?? 0}%"></div></div>
-  <div class="pi">Última acción: ${p.ultima_accion || '—'}</div>
-  <button onclick="updP(${p.id}, ${p.progreso ?? 0})" class="bu" style="margin-top:10px;width:100%">ACTUALIZAR</button>
-</div>`;
+    const sinMeta = _proyectos.filter(p => p.sin_meta && !p.es_padre).length;
+    const resumen = `<div class="proj-resumen">
+      <span>${_proyectos.length} proyectos</span>
+      ${sinMeta ? `<span class="proj-resumen-alerta">${sinMeta} sin fin definido</span>` : '<span class="proj-resumen-ok">todos con fin</span>'}
+    </div>`;
+
+    // Padres primero, con sus hijos dentro; después los independientes.
+    const padres  = _proyectos.filter(p => p.es_padre);
+    const sueltos = _proyectos.filter(p => !p.es_padre && !p.padre_id);
+
+    const grupos = padres.map(padre => {
+      const hijos = _proyectos.filter(h => h.padre_id === padre.id);
+      return `<div class="proj-grupo">
+        ${cardHTML(padre)}
+        <div class="proj-hijos">${hijos.map(h => cardHTML(h, true)).join('')}</div>
+      </div>`;
     }).join('');
+
+    pl.innerHTML = formHTML + resumen + grupos + sueltos.map(p => cardHTML(p)).join('');
+    rellenaSelectPadres();
 
   } catch {
     pl.innerHTML = formHTML + '<div class="empty-state">Error cargando proyectos</div>';
   }
 }
 
-/* ── 3. FORMULARIO NUEVO PROYECTO ───────────────────────────────── */
+/* Solo pueden ser padres los que no cuelgan de nadie: la jerarquía es de un nivel. */
+function rellenaSelectPadres(selectId = 'np-padre', excluirId = null, valor = '') {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const candidatos = _proyectos.filter(p => !p.padre_id && p.id !== excluirId);
+  sel.innerHTML = '<option value="">Nada (independiente)</option>' +
+    candidatos.map(p => `<option value="${p.id}"${String(valor) === String(p.id) ? ' selected' : ''}>${esc(p.nombre)}</option>`).join('');
+}
+
+/* ── 5. NUEVO PROYECTO ──────────────────────────────────────────── */
 function toggleNewProjForm() {
   const form = document.getElementById('new-proj-form');
   if (!form) return;
   const opening = !form.classList.contains('open');
   form.classList.toggle('open');
-  if (opening) {
-    const inp = document.getElementById('np-nombre');
-    setTimeout(() => inp?.focus(), 50);
-  }
+  if (opening) setTimeout(() => document.getElementById('np-nombre')?.focus(), 50);
 }
 
 async function createP() {
-  const nombreEl = document.getElementById('np-nombre');
-  const descEl   = document.getElementById('np-desc');
-  const nombre   = nombreEl?.value.trim() || '';
+  const val = id => document.getElementById(id)?.value.trim() || '';
+  const nombre = val('np-nombre');
   if (!nombre) { toast('Introduce un nombre para el proyecto', 'error'); return; }
 
   try {
     const res = await api('/proyectos', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ nombre, descripcion: descEl?.value.trim() || '' })
+      body:    JSON.stringify({
+        nombre,
+        objetivo:   val('np-desc'),     // el backend leía `objetivo`, no `descripcion`:
+        meta:       val('np-meta'),     // por eso los proyectos nacían sin objetivo
+        meta_valor: val('np-meta-valor'),
+        metrica:    val('np-metrica'),
+        categoria:  val('np-categoria'),
+        padre_id:   val('np-padre')
+      })
     });
-    if (!res.ok) throw new Error(res.status);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || res.status);
+    }
     toast('Proyecto creado');
+    toggleNewProjForm();
+    ['np-nombre', 'np-desc', 'np-meta', 'np-meta-valor', 'np-metrica'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
     loadP();
-  } catch {
-    toast('Error al crear proyecto', 'error');
+  } catch (e) {
+    toast(e.message || 'Error al crear proyecto', 'error');
   }
 }
 
-/* ── 4. ELIMINAR PROYECTO ───────────────────────────────────────── */
+/* ── 6. ELIMINAR ────────────────────────────────────────────────── */
 async function deleteP(id, nombre) {
-  if (!confirm(`¿Eliminar "${nombre}"?\nEsta acción no se puede deshacer.`)) return;
+  const p = _proyectos.find(x => x.id === id);
+  const aviso = p?.es_padre
+    ? `\nSus ${p.hijos.length} proyectos NO se borran: pasarán a ser independientes.`
+    : '';
+  if (!confirm(`¿Eliminar "${nombre}"?${aviso}\nEsta acción no se puede deshacer.`)) return;
   try {
     const res = await api(`/proyectos/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(res.status);
@@ -113,21 +264,72 @@ async function deleteP(id, nombre) {
   }
 }
 
-/* ── 5. MODAL DE EDICIÓN (reemplaza los prompt()) ───────────────── */
-function updP(id, actual) {
+/* ── 7. MODAL DE EDICIÓN ────────────────────────────────────────── */
+function updP(id) {
+  const p = _proyectos.find(x => x.id === id);
+  if (!p) return;
   _editProjId = id;
 
-  const overlay   = document.getElementById('edit-proj-overlay');
+  const set = (elId, v) => { const el = document.getElementById(elId); if (el) el.value = v ?? ''; };
+  set('ep-nombre',     p.nombre);
+  set('ep-objetivo',   p.objetivo);
+  set('ep-meta',       p.meta);
+  set('ep-meta-valor', p.meta_valor);
+  set('ep-metrica',    p.metrica);
+  set('ep-valor',      p.valor_actual);
+  set('ep-categoria',  p.categoria);
+  set('ep-accion',     '');
+
+  rellenaSelectPadres('ep-padre', id, p.padre_id || '');
+
+  // El slider manual solo tiene sentido sin meta numérica y sin hijos:
+  // en los demás casos el progreso es un cálculo, no una opinión.
+  const manual = document.getElementById('ep-manual');
+  const usaCalculo = p.es_padre || Number(p.meta_valor) > 0;
+  if (manual) manual.style.display = usaCalculo ? 'none' : 'block';
   const progInput = document.getElementById('ep-prog');
   const progVal   = document.getElementById('ep-prog-val');
-  const accionEl  = document.getElementById('ep-accion');
+  if (progInput) progInput.value = p.progreso ?? 0;
+  if (progVal)   progVal.textContent = (p.progreso ?? 0) + '%';
 
-  if (progInput) progInput.value = actual;
-  if (progVal)   progVal.textContent = actual + '%';
-  if (accionEl)  accionEl.value = '';
-  if (overlay)   {
+  const calc = document.getElementById('ep-calculado');
+  if (calc) {
+    calc.style.display = usaCalculo ? 'block' : 'none';
+    calc.textContent = p.es_padre
+      ? `Progreso calculado: media de sus ${p.hijos.length} proyectos (${p.progreso_real}%)`
+      : `Progreso calculado desde la meta: ${p.progreso_real}%`;
+  }
+
+  // El padre no se edita a mano: sus cifras salen de los hijos.
+  const bloqueMeta = document.getElementById('ep-bloque-meta');
+  if (bloqueMeta) bloqueMeta.style.display = p.es_padre ? 'none' : 'block';
+
+  cargarHistorial(id);
+
+  const overlay = document.getElementById('edit-proj-overlay');
+  if (overlay) {
     overlay.style.display = 'flex';
-    setTimeout(() => accionEl?.focus(), 80);
+    setTimeout(() => document.getElementById('ep-accion')?.focus(), 80);
+  }
+}
+
+async function cargarHistorial(id) {
+  const cont = document.getElementById('ep-historial');
+  if (!cont) return;
+  cont.innerHTML = '<div class="ep-hist-vacio">Cargando historial...</div>';
+  try {
+    const res  = await api(`/proyectos/${id}/acciones`);
+    const data = await res.json();
+    if (!Array.isArray(data) || !data.length) {
+      cont.innerHTML = '<div class="ep-hist-vacio">Sin acciones registradas todavía</div>';
+      return;
+    }
+    cont.innerHTML = data.slice(0, 8).map(a => `<div class="ep-hist-item">
+      <span class="ep-hist-fecha">${esc(String(a.fecha).slice(0, 10))}</span>
+      <span class="ep-hist-txt">${esc(a.accion)}</span>
+    </div>`).join('');
+  } catch {
+    cont.innerHTML = '<div class="ep-hist-vacio">No se pudo cargar el historial</div>';
   }
 }
 
@@ -139,23 +341,41 @@ function closeEditProjModal() {
 
 async function saveEditP() {
   if (_editProjId === null) return;
+  const val = id => document.getElementById(id)?.value.trim() ?? '';
 
-  const accionEl = document.getElementById('ep-accion');
-  const progEl   = document.getElementById('ep-prog');
-  const accion   = accionEl?.value.trim() || '';
-  const progreso = Math.max(0, Math.min(100, parseInt(progEl?.value) || 0));
+  const nombre = val('ep-nombre');
+  if (!nombre) { toast('El nombre no puede quedar vacío', 'error'); return; }
+
+  const body = {
+    nombre,
+    objetivo:      val('ep-objetivo'),
+    meta:          val('ep-meta'),
+    meta_valor:    val('ep-meta-valor'),
+    metrica:       val('ep-metrica'),
+    valor_actual:  val('ep-valor'),
+    categoria:     val('ep-categoria'),
+    padre_id:      val('ep-padre'),
+    ultima_accion: val('ep-accion')
+  };
+  // El progreso manual solo se manda cuando es él quien manda.
+  if (document.getElementById('ep-manual')?.style.display !== 'none') {
+    body.progreso = Math.max(0, Math.min(100, parseInt(val('ep-prog')) || 0));
+  }
 
   try {
     const res = await api(`/proyectos/${_editProjId}`, {
       method:  'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ ultima_accion: accion, progreso })
+      body:    JSON.stringify(body)
     });
-    if (!res.ok) throw new Error(res.status);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || res.status);
+    }
     toast('Proyecto actualizado');
     closeEditProjModal();
     loadP();
-  } catch {
-    toast('Error al actualizar proyecto', 'error');
+  } catch (e) {
+    toast(e.message || 'Error al actualizar proyecto', 'error');
   }
 }

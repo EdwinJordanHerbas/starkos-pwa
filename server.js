@@ -300,38 +300,168 @@ app.post('/logs', async (req, res) => {
 // ════════════════════════════════════════════════════════
 // PROYECTOS
 // ════════════════════════════════════════════════════════
+// Un proyecto ya no es solo una barra de progreso: declara su FIN (una meta
+// medible) y puede colgar de otro. De ahí salen las dos reglas de progreso:
+//   · con meta_valor > 0 → progreso = valor_actual / meta_valor
+//   · si tiene hijos     → progreso = media de sus hijos
+// El valor manual solo manda cuando no hay ni meta ni hijos, que es como
+// quedaron los proyectos creados antes de la v6.
+const PROY_EDITABLE = [
+  'nombre', 'objetivo', 'meta', 'metrica', 'meta_valor',
+  'valor_actual', 'categoria', 'padre_id', 'progreso', 'ultima_accion'
+];
+
+function progresoHoja(p) {
+  const metaV = Number(p.meta_valor);
+  if (metaV > 0) {
+    const actual = Number(p.valor_actual) || 0;
+    return Math.max(0, Math.min(100, Math.round((actual / metaV) * 100)));
+  }
+  return p.progreso ?? 0;
+}
+
+function decorarProyectos(rows) {
+  const hijosDe = new Map();
+  for (const p of rows) {
+    if (!p.padre_id) continue;
+    if (!hijosDe.has(p.padre_id)) hijosDe.set(p.padre_id, []);
+    hijosDe.get(p.padre_id).push(p);
+  }
+  const ahora = Date.now();
+  return rows.map(p => {
+    const hijos = hijosDe.get(p.id) || [];
+    return {
+      ...p,
+      progreso_real: hijos.length
+        ? Math.round(hijos.reduce((a, h) => a + progresoHoja(h), 0) / hijos.length)
+        : progresoHoja(p),
+      es_padre:      hijos.length > 0,
+      hijos:         hijos.map(h => h.id),
+      dias_inactivo: p.updated_at
+        ? Math.floor((ahora - new Date(p.updated_at).getTime()) / 86400000)
+        : null,
+      // Sin fin declarado no hay forma de saber si el proyecto avanza:
+      // el front lo marca para que definirlo sea la primera acción.
+      sin_meta: !(Number(p.meta_valor) > 0) && !p.meta
+    };
+  });
+}
+
+// La jerarquía se limita a un nivel (marca → trabajos). Con eso basta para
+// agrupar por cliente y no hay que perseguir ciclos en el árbol.
+async function padreValido(id, padreId) {
+  if (padreId === null || padreId === undefined || padreId === '') return { ok: true };
+  const pid = parseInt(padreId, 10);
+  if (Number.isNaN(pid))    return { ok: false, error: 'padre_id no es un número' };
+  if (pid === parseInt(id, 10)) return { ok: false, error: 'Un proyecto no puede colgar de sí mismo' };
+
+  const { rows } = await db('SELECT id, padre_id FROM proyectos WHERE id=$1', [pid]);
+  if (!rows.length) return { ok: false, error: 'El proyecto padre no existe' };
+  if (rows[0].padre_id) return { ok: false, error: 'El padre ya cuelga de otro: la jerarquía es de un solo nivel' };
+
+  const { rows: propios } = await db('SELECT id FROM proyectos WHERE padre_id=$1 LIMIT 1', [id]);
+  if (propios.length) return { ok: false, error: 'Este proyecto ya tiene hijos: no puede colgar de otro' };
+
+  return { ok: true };
+}
+
 app.get('/proyectos', async (req, res) => {
   try {
     const { rows } = await db('SELECT * FROM proyectos ORDER BY id');
+    res.json(decorarProyectos(rows));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Historial de un proyecto: lo que `ultima_accion` sobrescribía y se perdía.
+app.get('/proyectos/:id/acciones', async (req, res) => {
+  try {
+    const { rows } = await db(
+      `SELECT id, fecha, accion, progreso, valor_actual
+         FROM proyecto_acciones WHERE proyecto_id=$1
+        ORDER BY fecha DESC, id DESC LIMIT 50`,
+      [req.params.id]
+    );
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/proyectos', async (req, res) => {
-  const { nombre, objetivo } = req.body;
+  // `descripcion` es el nombre que usaba el front antiguo: se acepta como
+  // alias para que un service worker con JS cacheado no cree proyectos mudos.
+  const b        = req.body || {};
+  const nombre   = (b.nombre || '').trim();
+  const objetivo = b.objetivo ?? b.descripcion ?? '';
   if (!nombre) return res.status(400).json({ error: 'Nombre requerido' });
+
+  const chk = await padreValido(null, b.padre_id);
+  if (!chk.ok) return res.status(400).json({ error: chk.error });
+
   try {
     const { rows } = await db(
-      'INSERT INTO proyectos (nombre, objetivo, progreso, ultima_accion) VALUES ($1,$2,0,$3) RETURNING *',
-      [nombre, objetivo || '', 'Proyecto creado']
+      `INSERT INTO proyectos
+         (nombre, objetivo, meta, metrica, meta_valor, valor_actual,
+          categoria, padre_id, progreso, ultima_accion)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9) RETURNING *`,
+      [
+        nombre, objetivo,
+        b.meta || null, b.metrica || null,
+        b.meta_valor != null && b.meta_valor !== '' ? b.meta_valor : null,
+        b.valor_actual != null && b.valor_actual !== '' ? b.valor_actual : 0,
+        b.categoria || null,
+        b.padre_id ? parseInt(b.padre_id, 10) : null,
+        'Proyecto creado'
+      ]
     );
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.put('/proyectos/:id', async (req, res) => {
-  const { progreso, ultima_accion } = req.body;
+  const b = req.body || {};
+  const campos = PROY_EDITABLE.filter(c => b[c] !== undefined);
+  if (!campos.length) return res.status(400).json({ error: 'Nada que actualizar' });
+
+  if (campos.includes('padre_id')) {
+    const chk = await padreValido(req.params.id, b.padre_id);
+    if (!chk.ok) return res.status(400).json({ error: chk.error });
+  }
+
+  // Los nombres de columna salen de la lista blanca PROY_EDITABLE, nunca del
+  // cuerpo de la petición: los valores siguen yendo parametrizados.
+  const sets   = campos.map((c, i) => `${c}=$${i + 1}`);
+  const values = campos.map(c => {
+    if (b[c] === '' && c !== 'ultima_accion' && c !== 'nombre') return null;
+    if (c === 'padre_id') return b[c] ? parseInt(b[c], 10) : null;
+    return b[c];
+  });
+  values.push(req.params.id);
+
   try {
     const { rows } = await db(
-      'UPDATE proyectos SET progreso=$1, ultima_accion=$2, updated_at=NOW() WHERE id=$3 RETURNING *',
-      [progreso, ultima_accion, req.params.id]
+      `UPDATE proyectos SET ${sets.join(', ')}, updated_at=NOW()
+        WHERE id=$${values.length} RETURNING *`,
+      values
     );
+    if (!rows.length) return res.status(404).json({ error: 'Proyecto no encontrado' });
+
+    // Cada avance con texto queda registrado, no solo el último.
+    if (b.ultima_accion && String(b.ultima_accion).trim()) {
+      await db(
+        `INSERT INTO proyecto_acciones (proyecto_id, fecha, accion, progreso, valor_actual)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [req.params.id, hoyStr(), String(b.ultima_accion).trim(),
+         rows[0].progreso ?? null, rows[0].valor_actual ?? null]
+      ).catch(e => console.error('historial proyecto:', e.message));
+    }
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete('/proyectos/:id', async (req, res) => {
   try {
+    // Los hijos no se borran en cascada: suben a la raíz para no perderlos
+    // al eliminar la marca que los agrupaba.
+    await db('UPDATE proyectos SET padre_id=NULL WHERE padre_id=$1', [req.params.id]);
     await db('DELETE FROM proyectos WHERE id=$1', [req.params.id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1091,11 +1221,19 @@ app.get('/resumen/:fecha', async (req, res) => {
     const strava_actividad_hoy = stravaA.length > 0;
 
     // ── 6. Proyectos activos ─────────────────────────────
-    const { rows: proyectos } = await db(
-      'SELECT nombre, progreso FROM proyectos WHERE progreso < 100 ORDER BY progreso ASC'
-    ).catch(() => ({ rows: [] }));
-    const proyectos_activos    = proyectos.length;
-    const proyecto_prioritario = proyectos[0]?.nombre || null;
+    // El prioritario sale siempre de las hojas: un proyecto padre solo resume
+    // a sus hijos, así que proponerlo como tarea del día no diría qué hacer.
+    // Y antes que lo más atrasado va lo que ni siquiera tiene fin declarado:
+    // sin meta no hay forma de saber si eso avanza.
+    const { rows: proyRows } = await db('SELECT * FROM proyectos').catch(() => ({ rows: [] }));
+    const hojas = decorarProyectos(proyRows)
+      .filter(p => !p.es_padre && p.progreso_real < 100)
+      .sort((a, b) => (a.sin_meta === b.sin_meta)
+        ? a.progreso_real - b.progreso_real
+        : (a.sin_meta ? -1 : 1));
+    const proyectos_activos    = hojas.length;
+    const proyectos_sin_meta   = hojas.filter(p => p.sin_meta).length;
+    const proyecto_prioritario = hojas[0]?.nombre || null;
 
     // ── 7. Score de energía ──────────────────────────────
     const sueno_score = Math.min(1, (sueno_horas || 0) / 8) * 40;
@@ -1118,6 +1256,7 @@ app.get('/resumen/:fecha', async (req, res) => {
       energia_score,
       nota,
       proyectos_activos,
+      proyectos_sin_meta,
       proyecto_prioritario
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1139,7 +1278,7 @@ app.patch('/logs/:fecha/nota', async (req, res) => {
 
 // ── Fallback SPA: cualquier GET no-API sirve el index ────
 app.listen(PORT, () => {
-  console.log(`OKIRO Backend v4.1 · :${PORT}`);
+  console.log(`OKIRO Backend v4.2 · :${PORT}`);
   console.log(`· Auth:  ${APP_TOKEN ? 'ACTIVADA (APP_TOKEN)' : 'DESACTIVADA — define APP_TOKEN en producción'}`);
   if (APP_TOKEN && APP_TOKEN.length < 24) {
     console.warn(`· ⚠ CLAVE DÉBIL: ${APP_TOKEN.length} caracteres. Detrás de esta clave están tu base de datos`);

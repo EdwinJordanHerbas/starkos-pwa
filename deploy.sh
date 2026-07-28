@@ -30,7 +30,7 @@ cp -r "$SRC/assets" /opt/pwa/assets
 
 echo ">> Migraciones de base de datos (idempotentes)"
 if docker ps --format '{{.Names}}' | grep -q '^postgres$'; then
-  for M in migration.sql migration-v5.sql; do
+  for M in migration.sql migration-v5.sql migration-v6.sql; do
     docker exec -i postgres psql -U postgres -d starkos < "$SRC/$M" >/dev/null 2>&1 \
       && echo "   $M aplicada" \
       || echo "   !! $M fallo (no bloqueante) - revisa a mano"
