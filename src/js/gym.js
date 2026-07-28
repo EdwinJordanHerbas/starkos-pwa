@@ -785,7 +785,13 @@ async function renderMedidas() {
     ? new Date(ultima.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
     : null;
 
-  gc.insertAdjacentHTML('beforeend', `
+  // Pedir las medidas tarda, y para entonces el historial ya se ha insertado:
+  // se coloca antes de él, y nunca dos veces si se vuelve a la pestaña.
+  gc.querySelectorAll('.mc-wrap').forEach(el => el.remove());
+  const hist  = document.getElementById('gym-hist-wrap');
+  const donde = hist ? [hist, 'beforebegin'] : [gc, 'beforeend'];
+
+  donde[0].insertAdjacentHTML(donde[1], `
 <div class="mc-wrap">
   <div class="stl" style="margin:18px 0 10px">CUERPO</div>
   <div class="card glass-strong mc-card">
