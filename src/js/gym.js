@@ -159,6 +159,7 @@ function renderGym() {
   if (!gymSesion || gymSesion.completada) {
     const gc = document.getElementById('gym-content');
     if (!gc) return;
+    renderMedidas();
     gc.insertAdjacentHTML('beforeend', `
       <div id="gym-hist-wrap" style="margin-top:14px">
         <button class="bu" id="gym-hist-btn" onclick="toggleGymHistory()"
@@ -741,5 +742,105 @@ async function loadGymHistory() {
 
   } catch {
     sec.innerHTML = '<div class="empty-state" style="padding:16px 0">Error cargando historial</div>';
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   8. COMPOSICIÓN CORPORAL
+   ══════════════════════════════════════════════════════════════════
+   Entrenar no es progresar. Hasta aquí OKIRO sabía si habías ido al
+   gimnasio, pero no si estabas recuperando la masa que perdiste, que es
+   el motivo por el que existe. Los proyectos con fuente de composición
+   leen de estas medidas.                                             */
+let _medidasAbierto = false;
+
+function _delta(actual, previo, unidad, masEsMejor = true) {
+  if (actual == null || previo == null) return '';
+  const d = Number(actual) - Number(previo);
+  if (Math.abs(d) < 0.05) return '<span class="mc-igual">igual</span>';
+  const bueno = masEsMejor ? d > 0 : d < 0;
+  const signo = d > 0 ? '+' : '';
+  return `<span class="${bueno ? 'mc-sube' : 'mc-baja'}">${signo}${d.toFixed(1)}${unidad}</span>`;
+}
+
+async function renderMedidas() {
+  const gc = document.getElementById('gym-content');
+  if (!gc) return;
+
+  let ultima = null, previa = null;
+  try {
+    const res  = await api('/medidas');
+    const data = res.ok ? await res.json() : [];
+    ultima = data[0] || null;
+    previa = data[1] || null;
+  } catch { /* sin medidas todavía: la tarjeta sale vacía, no rota */ }
+
+  const dato = (val, unidad, etiqueta, prev, masEsMejor) => `
+    <div class="mc-dato">
+      <div class="mc-val">${val != null ? Number(val).toLocaleString('es-ES', { maximumFractionDigits: 1 }) : '—'}<span class="mc-un">${val != null ? unidad : ''}</span></div>
+      <div class="mc-lbl">${etiqueta} ${_delta(val, prev, unidad, masEsMejor)}</div>
+    </div>`;
+
+  const fecha = ultima
+    ? new Date(ultima.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+    : null;
+
+  gc.insertAdjacentHTML('beforeend', `
+<div class="mc-wrap">
+  <div class="stl" style="margin:18px 0 10px">CUERPO</div>
+  <div class="card glass-strong mc-card">
+    ${ultima ? `
+    <div class="mc-datos">
+      ${dato(ultima.masa_muscular, ' kg', 'músculo', previa?.masa_muscular, true)}
+      ${dato(ultima.grasa_pct,     '%',   'grasa',   previa?.grasa_pct,     false)}
+      ${dato(ultima.peso,          ' kg', 'peso',    previa?.peso,          true)}
+    </div>
+    <div class="mc-fecha">última medida: ${fecha}</div>`
+    : '<div class="mc-vacio">Sin medidas todavía. Sin esto, "volver a mi mejor versión" no tiene número.</div>'}
+    <div id="mc-form" class="mc-form${_medidasAbierto ? ' open' : ''}">
+      <div class="form-row">
+        <div class="form-field"><label>Músculo (kg)</label><input id="mc-masa" type="number" step="0.1" inputmode="decimal" placeholder="${ultima?.masa_muscular ?? '0'}"></div>
+        <div class="form-field"><label>Grasa (%)</label><input id="mc-grasa" type="number" step="0.1" inputmode="decimal" placeholder="${ultima?.grasa_pct ?? '0'}"></div>
+      </div>
+      <div class="form-field" style="margin-bottom:10px"><label>Peso (kg)</label><input id="mc-peso" type="number" step="0.1" inputmode="decimal" placeholder="${ultima?.peso ?? '0'}"></div>
+      <button class="bs" onclick="guardarMedida()">GUARDAR MEDIDA</button>
+    </div>
+    <button class="bu mc-btn" onclick="toggleMedidaForm()">${_medidasAbierto ? 'CANCELAR' : 'APUNTAR MEDIDA'}</button>
+  </div>
+</div>`);
+}
+
+function toggleMedidaForm() {
+  _medidasAbierto = !_medidasAbierto;
+  document.getElementById('mc-form')?.classList.toggle('open', _medidasAbierto);
+  const btn = document.querySelector('.mc-btn');
+  if (btn) btn.textContent = _medidasAbierto ? 'CANCELAR' : 'APUNTAR MEDIDA';
+  if (_medidasAbierto) setTimeout(() => document.getElementById('mc-masa')?.focus(), 60);
+}
+
+async function guardarMedida() {
+  const val = id => document.getElementById(id)?.value.trim() || '';
+  const body = { masa_muscular: val('mc-masa'), grasa_pct: val('mc-grasa'), peso: val('mc-peso') };
+  if (!body.masa_muscular && !body.grasa_pct && !body.peso) {
+    toast('Apunta al menos un dato', 'error');
+    return;
+  }
+  try {
+    const res = await api('/medidas', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error guardando');
+    }
+    _medidasAbierto = false;
+    toast('Medida guardada');
+    // Los proyectos que se miden por composición cambian con esto.
+    document.querySelector('.mc-wrap')?.remove();
+    renderMedidas();
+  } catch (e) {
+    toast(e.message || 'Error guardando la medida', 'error');
   }
 }

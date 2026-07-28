@@ -8,6 +8,7 @@
 /* ── ESTADO ─────────────────────────────────────────────────────── */
 let _editProjId = null;
 let _proyectos  = [];   // último GET, para poblar el modal sin volver a pedir
+let _fuentes    = [];   // catálogo de dónde puede salir el número (lo sirve el backend)
 
 /* ── 1. RANGO Y FORMATO ─────────────────────────────────────────── */
 function getRank(progreso) {
@@ -109,8 +110,71 @@ function cardHTML(p, esHijo = false) {
     <span class="pi">${p.ultima_accion ? esc(p.ultima_accion) : 'sin acciones registradas'}</span>
     <span class="pc-pct">${prog}%</span>
   </div>
+  ${medirHTML(p)}
   <button onclick="updP(${p.id})" class="bu pc-btn">ACTUALIZAR</button>
 </div>`;
+}
+
+/* ── 3b. REGISTRAR EL AVANCE ────────────────────────────────────── */
+/* El número era un campo perdido en mitad del formulario de edición, así que
+   lo único que se acababa registrando eran notas. Aquí se mueve solo, en la
+   tarjeta: escribir la cifra y confirmar. Y si el proyecto tiene una fuente,
+   ni eso: OKIRO lo saca de sus propios datos.                          */
+function medirHTML(p) {
+  const metaV = Number(p.meta_valor);
+  // Sin meta no hay nada que registrar, y un padre sin meta resume a sus hijos.
+  if (!(metaV > 0)) return '';
+
+  if (p.fuente && p.fuente !== 'manual') {
+    const f = _fuentes.find(x => x.clave === p.fuente);
+    return `<div class="pc-auto">${OKICON.check || '·'} se mide solo · ${esc(f?.etiqueta || p.fuente)}</div>`;
+  }
+
+  const actual = Number(p.valor_actual) || 0;
+  return `<div class="pc-quick">
+    <label for="q-${p.id}">voy por</label>
+    <input type="number" id="q-${p.id}" value="${actual}" step="any" inputmode="decimal"
+           onkeydown="if(event.key==='Enter')guardarValor(${p.id})">
+    <span class="pc-quick-un">${esc(p.metrica || '')}</span>
+    <button class="pc-quick-ok" onclick="guardarValor(${p.id})" title="Guardar">GUARDAR</button>
+  </div>`;
+}
+
+/* El desplegable enseña lo que cada fuente vale AHORA MISMO: elegir "entrenos
+   de los últimos 7 días" sabiendo que ahora marca 3 evita metas al aire. */
+function fuenteSelectHTML(id, valor = 'manual') {
+  const opciones = _fuentes.length ? _fuentes : [{ clave: 'manual', etiqueta: 'A mano' }];
+  return `<select id="${id}">${opciones.map(f => {
+    const ahora = f.valor_ahora != null ? ` — ahora ${fmtNum(f.valor_ahora)}` : '';
+    return `<option value="${f.clave}"${f.clave === valor ? ' selected' : ''}>${esc(f.etiqueta)}${ahora}</option>`;
+  }).join('')}</select>`;
+}
+
+async function guardarValor(id) {
+  const p     = _proyectos.find(x => x.id === id);
+  const campo = document.getElementById(`q-${id}`);
+  if (!p || !campo) return;
+
+  const valor = campo.value.trim();
+  if (valor === '' || isNaN(Number(valor))) { toast('Escribe un número', 'error'); return; }
+  if (Number(valor) === Number(p.valor_actual)) { toast('Ya estaba en ese número'); return; }
+
+  try {
+    const res = await api(`/proyectos/${id}`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        valor_actual: valor,
+        // Queda en el historial con la cifra: así la evolución se puede leer.
+        ultima_accion: `${fmtNum(valor)}${p.metrica ? ' ' + p.metrica : ''}`
+      })
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+    toast('Avance registrado');
+    loadP();
+  } catch (e) {
+    toast(e.message || 'Error registrando el avance', 'error');
+  }
 }
 
 /* ── 4. CARGAR ──────────────────────────────────────────────────── */
@@ -119,7 +183,9 @@ async function loadP() {
   if (!pl) return;
   pl.innerHTML = '<div class="empty-state">Cargando...</div>';
 
-  const formHTML = `
+  // Función y no constante: el desplegable de fuentes necesita el catálogo,
+  // que se pide más abajo.
+  const formHTML = () => `
 <button class="bs np-toggle-btn" onclick="toggleNewProjForm()">+ NUEVO PROYECTO</button>
 <div id="new-proj-form" class="np-form">
   <div class="ct" style="margin-bottom:12px">NUEVO PROYECTO</div>
@@ -145,6 +211,10 @@ async function loadP() {
       <input type="text" id="np-metrica" placeholder="€/mes">
     </div>
   </div>
+  <div class="form-field" style="margin-bottom:8px">
+    <label>¿De dónde sale el número? <span class="lbl-hint">automático = no hay que teclearlo</span></label>
+    ${fuenteSelectHTML('np-fuente')}
+  </div>
   <div class="np-row" style="margin-bottom:12px">
     <div class="form-field">
       <label>Categoría</label>
@@ -163,12 +233,20 @@ async function loadP() {
 </div>`;
 
   try {
+    // El catálogo de fuentes se pide una vez: el backend manda, para que la app
+    // no ofrezca medir por algo que él no sabe calcular.
+    if (!_fuentes.length) {
+      _fuentes = await api('/proyectos/fuentes')
+        .then(r => (r.ok ? r.json() : []))
+        .catch(() => []);
+    }
+
     const res  = await api('/proyectos');
     const data = await res.json();
     _proyectos = Array.isArray(data) ? data : [];
 
     if (!_proyectos.length) {
-      pl.innerHTML = formHTML + '<div class="empty-state">Sin proyectos activos</div>';
+      pl.innerHTML = formHTML() + '<div class="empty-state">Sin proyectos activos</div>';
       rellenaSelectPadres();
       return;
     }
@@ -191,12 +269,12 @@ async function loadP() {
       </div>`;
     }).join('');
 
-    pl.innerHTML = formHTML + resumen + grupos + sueltos.map(p => cardHTML(p)).join('');
+    pl.innerHTML = formHTML() + resumen + grupos + sueltos.map(p => cardHTML(p)).join('');
     rellenaSelectPadres();
     notionEstado();
 
   } catch {
-    pl.innerHTML = formHTML + '<div class="empty-state">Error cargando proyectos</div>';
+    pl.innerHTML = formHTML() + '<div class="empty-state">Error cargando proyectos</div>';
   }
 }
 
@@ -348,6 +426,7 @@ async function createP() {
         meta:       val('np-meta'),     // por eso los proyectos nacían sin objetivo
         meta_valor: val('np-meta-valor'),
         metrica:    val('np-metrica'),
+        fuente:     val('np-fuente'),
         categoria:  val('np-categoria'),
         padre_id:   val('np-padre')
       })
@@ -402,6 +481,28 @@ function updP(id) {
 
   rellenaSelectPadres('ep-padre', id, p.padre_id || '');
 
+  // La unidad va junto al campo del número: "voy por 3" no dice nada, "voy por
+  // 3 clientes" sí.
+  const un = document.getElementById('ep-valor-un');
+  if (un) un.textContent = p.metrica ? `en ${p.metrica}` : '';
+
+  const wrap = document.getElementById('ep-fuente-wrap');
+  if (wrap) wrap.innerHTML = fuenteSelectHTML('ep-fuente', p.fuente || 'manual');
+
+  // Con fuente automática el número no se teclea: se muestra de dónde sale y
+  // el campo queda bloqueado, para que nadie escriba encima de un cálculo.
+  const auto     = document.getElementById('ep-auto');
+  const valorInp = document.getElementById('ep-valor');
+  const esAuto   = p.fuente && p.fuente !== 'manual';
+  if (valorInp) valorInp.disabled = !!esAuto;
+  if (auto) {
+    auto.style.display = esAuto ? 'block' : 'none';
+    if (esAuto) {
+      const f = _fuentes.find(x => x.clave === p.fuente);
+      auto.textContent = `Este número lo calcula OKIRO: ${f?.etiqueta || p.fuente}. Para escribirlo a mano, cambia la fuente ahí abajo.`;
+    }
+  }
+
   // El slider manual solo tiene sentido sin meta numérica y sin hijos:
   // en los demás casos el progreso es un cálculo, no una opinión.
   const manual = document.getElementById('ep-manual');
@@ -426,7 +527,9 @@ function updP(id) {
   const overlay = document.getElementById('edit-proj-overlay');
   if (overlay) {
     overlay.style.display = 'flex';
-    setTimeout(() => document.getElementById('ep-accion')?.focus(), 80);
+    // El cursor va al número cuando hay algo que medir; si no, a la nota.
+    const alNumero = metaPropia && !esAuto;
+    setTimeout(() => document.getElementById(alNumero ? 'ep-valor' : 'ep-accion')?.focus(), 80);
   }
 }
 
@@ -470,10 +573,14 @@ async function saveEditP() {
     meta_valor:    val('ep-meta-valor'),
     metrica:       val('ep-metrica'),
     valor_actual:  val('ep-valor'),
+    fuente:        val('ep-fuente') || 'manual',
     categoria:     val('ep-categoria'),
     padre_id:      val('ep-padre'),
     ultima_accion: val('ep-accion')
   };
+  // Con fuente automática el campo va bloqueado y llega vacío: mandarlo
+  // borraría el valor calculado en la base.
+  if (body.fuente !== 'manual') delete body.valor_actual;
   // El progreso manual solo se manda cuando es él quien manda.
   if (document.getElementById('ep-manual')?.style.display !== 'none') {
     body.progreso = Math.max(0, Math.min(100, parseInt(val('ep-prog')) || 0));

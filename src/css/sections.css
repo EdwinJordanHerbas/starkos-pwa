@@ -1195,6 +1195,136 @@
 .pm-falta     { color: var(--text-4); margin-left: 6px; }
 .pm-engloba   { font-family: var(--font-sans); font-size: 9px; color: var(--text-4); margin-top: 4px; }
 
+/* Registrar el avance sin abrir el modal: el número, en la propia tarjeta */
+.pc-quick {
+  display:       flex;
+  align-items:   center;
+  gap:           8px;
+  margin:        10px 0 8px;
+  padding:       8px 10px;
+  background:    rgba(139, 77, 255, 0.06);
+  border-radius: var(--radius-sm);
+}
+
+.pc-quick label {
+  font-family:    var(--font-sans);
+  font-size:      10px;
+  color:          var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.pc-quick input {
+  width:         72px;
+  padding:       6px 8px;
+  background:    rgba(0, 0, 0, 0.35);
+  border:        0.5px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  color:         var(--text-1);
+  font-family:   var(--font-mono, var(--font-sans));
+  font-size:     14px;
+  text-align:    center;
+}
+
+.pc-quick input:focus {
+  outline:      none;
+  border-color: var(--brand);
+}
+
+.pc-quick-un {
+  flex:        1;
+  font-family: var(--font-sans);
+  font-size:   10px;
+  color:       var(--text-4);
+}
+
+.pc-quick-ok {
+  padding:        7px 12px;
+  background:     linear-gradient(135deg, var(--brand) 0%, var(--brand-deep) 100%);
+  border:         none;
+  border-radius:  8px;
+  color:          #000;
+  font-family:    var(--font-sans);
+  font-size:      10px;
+  font-weight:    700;
+  letter-spacing: 1px;
+  cursor:         pointer;
+}
+
+.pc-quick-ok:active { transform: scale(0.96); }
+
+/* Proyecto que se mide solo: no hay nada que teclear */
+.pc-auto {
+  display:     flex;
+  align-items: center;
+  gap:         6px;
+  margin:      10px 0 8px;
+  font-family: var(--font-sans);
+  font-size:   10px;
+  color:       var(--success);
+}
+
+.pc-auto svg { width: 12px; height: 12px; }
+
+.ep-auto {
+  font-family:   var(--font-sans);
+  font-size:     10px;
+  line-height:   1.5;
+  color:         var(--success);
+  background:    rgba(63, 178, 127, 0.08);
+  border-radius: var(--radius-sm);
+  padding:       8px 10px;
+  margin-bottom: 12px;
+}
+
+/* Composición corporal (pestaña GYM) */
+.mc-card   { padding: 14px; }
+.mc-datos  { display: flex; justify-content: space-between; gap: 8px; }
+.mc-dato   { flex: 1; text-align: center; }
+
+.mc-val {
+  font-family: var(--font-mono, var(--font-sans));
+  font-size:   22px;
+  color:       var(--text-1);
+  line-height: 1.1;
+}
+
+.mc-un  { font-size: 11px; color: var(--text-4); }
+
+.mc-lbl {
+  font-family:    var(--font-sans);
+  font-size:      9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color:          var(--text-4);
+  margin-top:     4px;
+}
+
+.mc-sube  { color: var(--success); }
+.mc-baja  { color: var(--danger); }
+.mc-igual { color: var(--text-4); }
+
+.mc-fecha {
+  font-family: var(--font-sans);
+  font-size:   9px;
+  color:       var(--text-4);
+  text-align:  center;
+  margin-top:  10px;
+}
+
+.mc-vacio {
+  font-family: var(--font-sans);
+  font-size:   11px;
+  line-height: 1.5;
+  color:       var(--text-4);
+  text-align:  center;
+  padding:     4px 8px 10px;
+}
+
+.mc-form      { display: none; padding-top: 12px; }
+.mc-form.open { display: block; }
+.mc-btn       { margin-top: 10px; height: 40px; font-size: 11px; letter-spacing: 1.5px; }
+
 /* Estado del puente con Notion */
 .notion-estado {
   font-family:   var(--font-sans);

@@ -30,7 +30,7 @@ cp -r "$SRC/assets" /opt/pwa/assets
 
 echo ">> Migraciones de base de datos (idempotentes)"
 if docker ps --format '{{.Names}}' | grep -q '^postgres$'; then
-  for M in migration.sql migration-v5.sql migration-v6.sql migration-v7.sql; do
+  for M in migration.sql migration-v5.sql migration-v6.sql migration-v7.sql migration-v8.sql; do
     docker exec -i postgres psql -U postgres -d starkos < "$SRC/$M" >/dev/null 2>&1 \
       && echo "   $M aplicada" \
       || echo "   !! $M fallo (no bloqueante) - revisa a mano"
@@ -55,6 +55,10 @@ fi
 # /push: suscripciones y disparo de la mision diaria
 if ! grep -q 'cruce' "$NGINX_SITE"; then
   sed -i 's#|ia|auth|resumen)#|ia|auth|resumen|push|cruce|party)#' "$NGINX_SITE"
+fi
+# /medidas: composicion corporal, la que mide "volver a mi mejor version"
+if ! grep -q 'medidas' "$NGINX_SITE"; then
+  sed -i 's#|push|cruce|party)#|push|cruce|party|medidas)#' "$NGINX_SITE"
 fi
 nginx -t && systemctl reload nginx
 

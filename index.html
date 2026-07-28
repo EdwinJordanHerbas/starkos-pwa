@@ -70,13 +70,29 @@
   <div class="ep-modal">
     <div class="ct" style="margin-bottom:16px">ACTUALIZAR PROYECTO</div>
 
-    <div class="form-field" style="margin-bottom:10px">
-      <label>Nombre</label>
-      <input type="text" id="ep-nombre" placeholder="Nombre del proyecto">
+    <!-- Lo primero es el número: si el avance queda enterrado bajo la ficha,
+         lo único que se acaba registrando son notas y nada se mide. -->
+    <div class="ep-sep">DÓNDE VAS</div>
+    <div class="np-row" style="margin-bottom:10px">
+      <div class="form-field">
+        <label>Voy por <span class="lbl-hint" id="ep-valor-un"></span></label>
+        <input type="number" id="ep-valor" placeholder="0" inputmode="decimal" step="any">
+      </div>
+      <div class="form-field">
+        <label>Categoría</label>
+        <select id="ep-categoria">
+          <option value="">—</option>
+          <option value="negocio">Negocio</option>
+          <option value="fisico">Físico</option>
+          <option value="aprendizaje">Aprendizaje</option>
+          <option value="personal">Personal</option>
+        </select>
+      </div>
     </div>
+    <div id="ep-auto" class="ep-auto" style="display:none"></div>
     <div class="form-field" style="margin-bottom:14px">
-      <label>¿De qué va?</label>
-      <input type="text" id="ep-objetivo" placeholder="Una línea">
+      <label>¿Qué has hecho? <span class="lbl-hint">opcional, queda en el historial</span></label>
+      <input type="text" id="ep-accion" placeholder="Publicado el vídeo 3">
     </div>
 
     <div id="ep-bloque-meta">
@@ -85,7 +101,7 @@
         <label>¿A qué fin? <span class="lbl-hint">lo que hace que avanzar signifique algo</span></label>
         <input type="text" id="ep-meta" placeholder="Ej: facturar 10.000 €/mes">
       </div>
-      <div class="np-row">
+      <div class="np-row" style="margin-bottom:10px">
         <div class="form-field">
           <label>Meta</label>
           <input type="number" id="ep-meta-valor" placeholder="10000" inputmode="decimal">
@@ -95,34 +111,24 @@
           <input type="text" id="ep-metrica" placeholder="€/mes">
         </div>
       </div>
-      <div class="np-row" style="margin-bottom:14px">
-        <div class="form-field">
-          <label>Voy por</label>
-          <input type="number" id="ep-valor" placeholder="0" inputmode="decimal">
-        </div>
-        <div class="form-field">
-          <label>Categoría</label>
-          <select id="ep-categoria">
-            <option value="">—</option>
-            <option value="negocio">Negocio</option>
-            <option value="fisico">Físico</option>
-            <option value="aprendizaje">Aprendizaje</option>
-            <option value="personal">Personal</option>
-          </select>
-        </div>
+      <div class="form-field" style="margin-bottom:14px">
+        <label>¿De dónde sale el número? <span class="lbl-hint">automático = no hay que teclearlo</span></label>
+        <div id="ep-fuente-wrap"></div>
       </div>
     </div>
 
-    <div class="ep-sep">ORGANIZACIÓN</div>
+    <div class="ep-sep">FICHA</div>
+    <div class="form-field" style="margin-bottom:10px">
+      <label>Nombre</label>
+      <input type="text" id="ep-nombre" placeholder="Nombre del proyecto">
+    </div>
+    <div class="form-field" style="margin-bottom:10px">
+      <label>¿De qué va?</label>
+      <input type="text" id="ep-objetivo" placeholder="Una línea">
+    </div>
     <div class="form-field" style="margin-bottom:14px">
       <label>Cuelga de</label>
       <select id="ep-padre"><option value="">Nada (independiente)</option></select>
-    </div>
-
-    <div class="ep-sep">HOY</div>
-    <div class="form-field" style="margin-bottom:12px">
-      <label>¿Qué has hecho?</label>
-      <input type="text" id="ep-accion" placeholder="Queda guardado en el historial">
     </div>
 
     <div id="ep-calculado" class="ep-calculado" style="display:none"></div>

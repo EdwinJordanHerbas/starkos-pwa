@@ -308,8 +308,81 @@ app.post('/logs', async (req, res) => {
 // quedaron los proyectos creados antes de la v6.
 const PROY_EDITABLE = [
   'nombre', 'objetivo', 'meta', 'metrica', 'meta_valor',
-  'valor_actual', 'categoria', 'padre_id', 'progreso', 'ultima_accion'
+  'valor_actual', 'categoria', 'padre_id', 'progreso', 'ultima_accion', 'fuente'
 ];
+
+// De dónde sale el número. Una cifra que hay que acordarse de actualizar deja
+// de actualizarse: con estas fuentes el proyecto avanza solo al entrenar o al
+// registrar el día, sin teclear nada. 'manual' sigue siendo válido para lo que
+// OKIRO no puede saber (clientes cerrados, vídeos publicados).
+const FUENTES = {
+  manual:          { etiqueta: 'A mano',                       unidad: '' },
+  racha_registros: { etiqueta: 'Días seguidos registrando',    unidad: 'días seguidos' },
+  entrenos_semana: { etiqueta: 'Entrenos de los últimos 7 días', unidad: 'entrenos/semana' },
+  volumen_semana:  { etiqueta: 'Kg levantados en 7 días',      unidad: 'kg/semana' },
+  masa_muscular:   { etiqueta: 'Masa muscular (última medida)', unidad: 'kg' },
+  grasa_pct:       { etiqueta: 'Grasa corporal (última medida)', unidad: '%' },
+  peso:            { etiqueta: 'Peso (última medida)',         unidad: 'kg' }
+};
+
+// Una sola tanda de consultas para todos los proyectos automáticos: son cuatro
+// lecturas pequeñas y evitan una consulta por tarjeta.
+async function valoresAutomaticos() {
+  const v = {};
+  try {
+    // Racha: días consecutivos con registro, contando desde hoy o desde ayer
+    // (a media mañana aún no hay registro de hoy y la racha no debe romperse).
+    const { rows: dias } = await db(
+      'SELECT DISTINCT fecha FROM daily_logs ORDER BY fecha DESC LIMIT 400');
+    let racha = 0;
+    if (dias.length) {
+      const dia = f => Math.floor(new Date(f).getTime() / 86400000);
+      const hoy = Math.floor(Date.now() / 86400000);
+      let esperado = dia(dias[0].fecha);
+      if (hoy - esperado <= 1) {
+        for (const d of dias) {
+          if (dia(d.fecha) !== esperado) break;
+          racha++; esperado--;
+        }
+      }
+    }
+    v.racha_registros = racha;
+
+    const { rows: [e] } = await db(
+      `SELECT count(*) AS n FROM sesiones_gym
+        WHERE completada = true AND fecha >= CURRENT_DATE - INTERVAL '7 days'`);
+    v.entrenos_semana = Number(e.n);
+
+    const { rows: [vol] } = await db(
+      `SELECT COALESCE(SUM(sr.peso * sr.reps), 0) AS kg
+         FROM series_realizadas sr
+         JOIN sesiones_gym s ON s.id = sr.sesion_id
+        WHERE sr.completada = true AND s.fecha >= CURRENT_DATE - INTERVAL '7 days'`);
+    v.volumen_semana = Math.round(Number(vol.kg));
+
+    // De cada medida se coge el último valor que exista, no el de la última
+    // fila: si te pesas sin apuntar la grasa, la grasa anterior sigue valiendo.
+    const { rows: [m] } = await db(
+      `SELECT
+         (SELECT masa_muscular FROM medidas_corporales WHERE masa_muscular IS NOT NULL ORDER BY fecha DESC LIMIT 1) AS masa,
+         (SELECT grasa_pct     FROM medidas_corporales WHERE grasa_pct     IS NOT NULL ORDER BY fecha DESC LIMIT 1) AS grasa,
+         (SELECT peso          FROM medidas_corporales WHERE peso          IS NOT NULL ORDER BY fecha DESC LIMIT 1) AS peso`);
+    if (m.masa  !== null) v.masa_muscular = Number(m.masa);
+    if (m.grasa !== null) v.grasa_pct     = Number(m.grasa);
+    if (m.peso  !== null) v.peso          = Number(m.peso);
+  } catch (e) {
+    // Un proyecto automático sin su tabla todavía no debe tumbar la pantalla.
+    console.error('valores automáticos:', e.message);
+  }
+  return v;
+}
+
+function aplicarFuentes(rows, auto) {
+  if (!auto) return rows;
+  return rows.map(p => (p.fuente && p.fuente !== 'manual' && auto[p.fuente] != null)
+    ? { ...p, valor_actual: auto[p.fuente] }
+    : p);
+}
 
 function progresoHoja(p) {
   const metaV = Number(p.meta_valor);
@@ -372,7 +445,19 @@ async function padreValido(id, padreId) {
 app.get('/proyectos', async (req, res) => {
   try {
     const { rows } = await db('SELECT * FROM proyectos ORDER BY id');
-    res.json(decorarProyectos(rows));
+    const auto = await valoresAutomaticos();
+    res.json(decorarProyectos(aplicarFuentes(rows, auto)));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// El catálogo lo sirve el backend para que el desplegable de la app y lo que
+// el backend sabe calcular no se separen nunca.
+app.get('/proyectos/fuentes', async (req, res) => {
+  try {
+    const auto = await valoresAutomaticos();
+    res.json(Object.entries(FUENTES).map(([clave, f]) => ({
+      clave, ...f, valor_ahora: clave === 'manual' ? null : (auto[clave] ?? null)
+    })));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -404,8 +489,8 @@ app.post('/proyectos', async (req, res) => {
     const { rows } = await db(
       `INSERT INTO proyectos
          (nombre, objetivo, meta, metrica, meta_valor, valor_actual,
-          categoria, padre_id, progreso, ultima_accion)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9) RETURNING *`,
+          categoria, padre_id, progreso, ultima_accion, fuente)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10) RETURNING *`,
       [
         nombre, objetivo,
         b.meta || null, b.metrica || null,
@@ -413,7 +498,8 @@ app.post('/proyectos', async (req, res) => {
         b.valor_actual != null && b.valor_actual !== '' ? b.valor_actual : 0,
         b.categoria || null,
         b.padre_id ? parseInt(b.padre_id, 10) : null,
-        'Proyecto creado'
+        'Proyecto creado',
+        FUENTES[b.fuente] ? b.fuente : 'manual'
       ]
     );
     notionPushDiferido();
@@ -476,6 +562,49 @@ app.delete('/proyectos/:id', async (req, res) => {
 // ════════════════════════════════════════════════════════
 // RUTINAS & GYM
 // ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// MEDIDAS CORPORALES
+// ════════════════════════════════════════════════════════
+// OKIRO nació para recuperar la forma perdida y no había dónde apuntar el
+// resultado: solo entrenos hechos. Esto es lo que convierte "volver a mi mejor
+// versión" en algo con número.
+app.get('/medidas', async (req, res) => {
+  try {
+    const { rows } = await db(
+      `SELECT id, fecha, peso, masa_muscular, grasa_pct, notas
+         FROM medidas_corporales ORDER BY fecha DESC LIMIT 60`);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/medidas', async (req, res) => {
+  const b = req.body || {};
+  const num = v => (v === '' || v === null || v === undefined ? null : Number(v));
+  const peso = num(b.peso), masa = num(b.masa_muscular), grasa = num(b.grasa_pct);
+  if (peso === null && masa === null && grasa === null) {
+    return res.status(400).json({ error: 'Apunta al menos un dato' });
+  }
+  try {
+    // Una medida por día: pesarse dos veces corrige, no duplica. COALESCE deja
+    // que apuntar solo el peso no borre la masa que ya habías metido.
+    const { rows } = await db(
+      `INSERT INTO medidas_corporales (fecha, peso, masa_muscular, grasa_pct, notas)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (fecha, usuario_id) DO UPDATE SET
+         peso          = COALESCE(EXCLUDED.peso,          medidas_corporales.peso),
+         masa_muscular = COALESCE(EXCLUDED.masa_muscular, medidas_corporales.masa_muscular),
+         grasa_pct     = COALESCE(EXCLUDED.grasa_pct,     medidas_corporales.grasa_pct),
+         notas         = COALESCE(EXCLUDED.notas,         medidas_corporales.notas)
+       RETURNING *`,
+      [b.fecha || hoyStr(), peso, masa, grasa, b.notas || null]);
+
+    // Los proyectos que se miden por composición cambian con esto: que Notion
+    // se entere sin esperar al cron.
+    notionPushDiferido();
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/rutinas', async (req, res) => {
   try {
     const { rows } = await db('SELECT * FROM rutinas ORDER BY id');
@@ -858,7 +987,7 @@ async function notionPush() {
   if (!c.notion_db_proyectos) throw Object.assign(new Error('Falta crear la base en Notion'), { status: 400 });
 
   const { rows } = await db('SELECT * FROM proyectos ORDER BY id');
-  const proyectos = decorarProyectos(rows);
+  const proyectos = decorarProyectos(aplicarFuentes(rows, await valoresAutomaticos()));
   const nombrePorId = new Map(rows.map(p => [p.id, p.nombre]));
 
   const texto = v => (v ? [{ type: 'text', text: { content: String(v).slice(0, 1900) } }] : []);
@@ -1468,7 +1597,7 @@ app.get('/resumen/:fecha', async (req, res) => {
     // Y antes que lo más atrasado va lo que ni siquiera tiene fin declarado:
     // sin meta no hay forma de saber si eso avanza.
     const { rows: proyRows } = await db('SELECT * FROM proyectos').catch(() => ({ rows: [] }));
-    const hojas = decorarProyectos(proyRows)
+    const hojas = decorarProyectos(aplicarFuentes(proyRows, await valoresAutomaticos()))
       .filter(p => !p.es_padre && p.progreso_real < 100)
       .sort((a, b) => (a.sin_meta === b.sin_meta)
         ? a.progreso_real - b.progreso_real
