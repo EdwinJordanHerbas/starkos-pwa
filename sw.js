@@ -3,7 +3,7 @@
 //  Â· EstÃ¡ticos (css/js/iconos/fuentes): cache-first con actualizaciÃ³n en segundo plano
 //  Â· NavegaciÃ³n (index.html): network-first con fallback a cachÃ© (offline)
 //  Â· API (/logs, /rutinas, ...): siempre red â€” nunca cachear datos
-const VERSION = 'okiro-v6.5.0';
+const VERSION = 'okiro-v6.6.0';
 const STATIC_CACHE = `${VERSION}-static`;
 
 const PRECACHE = [

@@ -308,7 +308,7 @@ app.post('/logs', async (req, res) => {
 // quedaron los proyectos creados antes de la v6.
 const PROY_EDITABLE = [
   'nombre', 'objetivo', 'meta', 'metrica', 'meta_valor',
-  'valor_actual', 'categoria', 'padre_id', 'progreso', 'ultima_accion', 'fuente'
+  'valor_actual', 'categoria', 'padre_id', 'progreso', 'ultima_accion', 'fuente', 'url'
 ];
 
 // De dónde sale el número. Una cifra que hay que acordarse de actualizar deja
@@ -322,8 +322,57 @@ const FUENTES = {
   volumen_semana:  { etiqueta: 'Kg levantados en 7 días',      unidad: 'kg/semana' },
   masa_muscular:   { etiqueta: 'Masa muscular (última medida)', unidad: 'kg' },
   grasa_pct:       { etiqueta: 'Grasa corporal (última medida)', unidad: '%' },
-  peso:            { etiqueta: 'Peso (última medida)',         unidad: 'kg' }
+  peso:            { etiqueta: 'Peso (última medida)',         unidad: 'kg' },
+  // Idiomas: los lee de tutoringles, que corre en el mismo Postgres.
+  ingles_palabras:    { etiqueta: 'Inglés · palabras dominadas',    unidad: 'palabras' },
+  ingles_situaciones: { etiqueta: 'Inglés · situaciones superadas', unidad: 'situaciones' },
+  ingles_racha:       { etiqueta: 'Inglés · días seguidos estudiando', unidad: 'días seguidos' }
 };
+
+// tutoringles vive en el mismo servidor de Postgres, en otra base: misma
+// máquina y mismas credenciales, solo cambia el nombre. Se lee y nunca se
+// escribe — OKIRO no tiene por qué tocar los datos de estudio.
+const TUTOR_URL = process.env.TUTORINGLES_URL ||
+  (process.env.DATABASE_URL || '').replace(/\/[^/?]+(\?|$)/, '/tutoringles$1');
+const poolTutor = TUTOR_URL ? new Pool({ connectionString: TUTOR_URL }) : null;
+if (poolTutor) poolTutor.on('error', e => console.error('DB tutoringles:', e.message));
+const dbTutor = (q, p) => poolTutor.query(q, p);
+
+// Días consecutivos hasta hoy (o hasta ayer: a media mañana todavía no hay
+// registro y la racha no debe romperse por eso).
+function rachaDeDias(fechas) {
+  if (!fechas.length) return 0;
+  const dia = f => Math.floor(new Date(f).getTime() / 86400000);
+  const hoy = Math.floor(Date.now() / 86400000);
+  let esperado = dia(fechas[0]);
+  if (hoy - esperado > 1) return 0;
+  let racha = 0;
+  for (const f of fechas) {
+    if (dia(f) !== esperado) break;
+    racha++; esperado--;
+  }
+  return racha;
+}
+
+async function valoresIngles() {
+  const v = {};
+  if (!poolTutor) return v;
+  try {
+    const [pal, sit, ses] = await Promise.all([
+      dbTutor(`SELECT count(*) FILTER (WHERE status = 'mastered') AS n FROM user_words`),
+      dbTutor('SELECT count(*) AS n FROM situation_progress WHERE completed'),
+      dbTutor('SELECT DISTINCT date FROM study_sessions ORDER BY date DESC LIMIT 400')
+    ]);
+    v.ingles_palabras    = Number(pal.rows[0].n);
+    v.ingles_situaciones = Number(sit.rows[0].n);
+    v.ingles_racha       = rachaDeDias(ses.rows.map(r => r.date));
+  } catch (e) {
+    // Si tutoringles está caído, sus proyectos se quedan con el último valor
+    // guardado en vez de tumbar la pantalla de proyectos entera.
+    console.error('valores de inglés:', e.message);
+  }
+  return v;
+}
 
 // Una sola tanda de consultas para todos los proyectos automáticos: son cuatro
 // lecturas pequeñas y evitan una consulta por tarjeta.
@@ -374,6 +423,7 @@ async function valoresAutomaticos() {
     // Un proyecto automático sin su tabla todavía no debe tumbar la pantalla.
     console.error('valores automáticos:', e.message);
   }
+  Object.assign(v, await valoresIngles());
   return v;
 }
 
@@ -631,8 +681,8 @@ app.post('/proyectos', async (req, res) => {
     const { rows } = await db(
       `INSERT INTO proyectos
          (nombre, objetivo, meta, metrica, meta_valor, valor_actual,
-          categoria, padre_id, progreso, ultima_accion, fuente)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10) RETURNING *`,
+          categoria, padre_id, progreso, ultima_accion, fuente, url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10,$11) RETURNING *`,
       [
         nombre, objetivo,
         b.meta || null, b.metrica || null,
@@ -641,7 +691,8 @@ app.post('/proyectos', async (req, res) => {
         b.categoria || null,
         b.padre_id ? parseInt(b.padre_id, 10) : null,
         'Proyecto creado',
-        FUENTES[b.fuente] ? b.fuente : 'manual'
+        FUENTES[b.fuente] ? b.fuente : 'manual',
+        (b.url || '').trim() || null
       ]
     );
     notionPushDiferido();

@@ -176,6 +176,17 @@ async function borrarHito(id) {
   } catch (e) { toast(e.message || 'Error al quitar', 'error'); }
 }
 
+/* Lo que ya está en marcha se abre desde su tarjeta, sin acordarse del
+   dominio. Solo http(s): un `javascript:` guardado en la URL se ejecutaría
+   al pulsar. */
+function enlaceHTML(p) {
+  const u = (p.url || '').trim();
+  if (!/^https?:\/\//i.test(u)) return '';
+  const dominio = u.replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+  return `<a class="pc-link" href="${esc(u)}" target="_blank" rel="noopener noreferrer"
+             onclick="event.stopPropagation()" title="Abrir ${esc(dominio)}">abrir ↗</a>`;
+}
+
 /* ── 3. TARJETA ─────────────────────────────────────────────────── */
 function cardHTML(p, esHijo = false) {
   const prog = p.progreso_real ?? p.progreso ?? 0;
@@ -195,7 +206,10 @@ function cardHTML(p, esHijo = false) {
               title="Eliminar proyecto">${OKICON.cross}</button>
     </div>
   </div>
-  <div class="pp">${esc(p.nombre)}</div>
+  <div class="pp">
+    ${esc(p.nombre)}
+    ${enlaceHTML(p)}
+  </div>
   ${p.objetivo ? `<div class="po">${esc(p.objetivo)}</div>` : ''}
   ${finHTML(p)}
   <div class="ph"><div class="pf" style="width:${prog}%"></div></div>
@@ -584,6 +598,7 @@ function updP(id) {
   set('ep-metrica',    p.metrica);
   set('ep-valor',      p.valor_actual);
   set('ep-categoria',  p.categoria);
+  set('ep-url',        p.url);
   set('ep-accion',     '');
 
   rellenaSelectPadres('ep-padre', id, p.padre_id || '');
@@ -682,6 +697,7 @@ async function saveEditP() {
     valor_actual:  val('ep-valor'),
     fuente:        val('ep-fuente') || 'manual',
     categoria:     val('ep-categoria'),
+    url:           val('ep-url'),
     padre_id:      val('ep-padre'),
     ultima_accion: val('ep-accion')
   };

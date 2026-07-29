@@ -1325,6 +1325,24 @@
 .mc-form.open { display: block; }
 .mc-btn       { margin-top: 10px; height: 40px; font-size: 11px; letter-spacing: 1.5px; }
 
+/* Enlace a la web del proyecto, junto al nombre */
+.pc-link {
+  font-family:    var(--font-sans);
+  font-size:      9px;
+  font-weight:    400;
+  letter-spacing: 0.5px;
+  color:          var(--brand-soft);
+  text-decoration: none;
+  border:         1px solid rgba(139, 77, 255, 0.35);
+  border-radius:  var(--radius-pill);
+  padding:        2px 8px;
+  margin-left:    8px;
+  white-space:    nowrap;
+  vertical-align: middle;
+}
+
+.pc-link:hover { background: rgba(139, 77, 255, 0.15); }
+
 /* ── HITOS ─────────────────────────────────────────────────────── */
 .hitos { margin-top: 10px; }
 
