@@ -384,16 +384,23 @@ function aplicarFuentes(rows, auto) {
     : p);
 }
 
-function progresoHoja(p) {
+// El progreso se decide en cascada: manda la cifra si la hay; si no, los
+// hitos; y si tampoco, el valor manual. Un trabajo de cliente no tiene cifra
+// natural —Salonio no se mide en "unidades de Salonio"— y se mide por lo que
+// queda por cerrar.
+function progresoHoja(p, tareas) {
   const metaV = Number(p.meta_valor);
   if (metaV > 0) {
     const actual = Number(p.valor_actual) || 0;
     return Math.max(0, Math.min(100, Math.round((actual / metaV) * 100)));
   }
+  if (tareas && tareas.total > 0) {
+    return Math.round((tareas.hechas / tareas.total) * 100);
+  }
   return p.progreso ?? 0;
 }
 
-function decorarProyectos(rows) {
+function decorarProyectos(rows, tareasPorProyecto = new Map()) {
   const hijosDe = new Map();
   for (const p of rows) {
     if (!p.padre_id) continue;
@@ -401,8 +408,11 @@ function decorarProyectos(rows) {
     hijosDe.get(p.padre_id).push(p);
   }
   const ahora = Date.now();
+  const tareasDe = id => tareasPorProyecto.get(id) || { total: 0, hechas: 0 };
+
   return rows.map(p => {
-    const hijos = hijosDe.get(p.id) || [];
+    const hijos  = hijosDe.get(p.id) || [];
+    const tareas = tareasDe(p.id);
     // Un padre con meta propia se mide por SU meta, no por la media de lo que
     // engloba: NeumorStudio va a 5 clientes, y eso no es el promedio de cómo
     // van las webs que firma. Sin meta propia, sí resume a sus hijos.
@@ -410,18 +420,40 @@ function decorarProyectos(rows) {
     return {
       ...p,
       progreso_real: (hijos.length && !metaPropia)
-        ? Math.round(hijos.reduce((a, h) => a + progresoHoja(h), 0) / hijos.length)
-        : progresoHoja(p),
+        ? Math.round(hijos.reduce((a, h) => a + progresoHoja(h, tareasDe(h.id)), 0) / hijos.length)
+        : progresoHoja(p, tareas),
       es_padre:      hijos.length > 0,
       hijos:         hijos.map(h => h.id),
+      tareas_total:  tareas.total,
+      tareas_hechas: tareas.hechas,
       dias_inactivo: p.updated_at
         ? Math.floor((ahora - new Date(p.updated_at).getTime()) / 86400000)
         : null,
-      // Sin fin declarado no hay forma de saber si el proyecto avanza:
-      // el front lo marca para que definirlo sea la primera acción.
-      sin_meta: !(Number(p.meta_valor) > 0) && !p.meta
+      // Sin fin declarado no hay forma de saber si el proyecto avanza: el
+      // front lo marca para que definirlo sea la primera acción. Tener hitos
+      // ya es tener fin, aunque no haya cifra.
+      sin_meta: !(Number(p.meta_valor) > 0) && !p.meta && tareas.total === 0
     };
   });
+}
+
+// Conteo de hitos de todos los proyectos en una sola consulta.
+async function contarTareas() {
+  const mapa = new Map();
+  try {
+    const { rows } = await db(
+      `SELECT proyecto_id,
+              count(*)                        AS total,
+              count(*) FILTER (WHERE hecha)   AS hechas
+         FROM proyecto_tareas GROUP BY proyecto_id`);
+    for (const r of rows) {
+      mapa.set(r.proyecto_id, { total: Number(r.total), hechas: Number(r.hechas) });
+    }
+  } catch (e) {
+    // Sin la tabla todavía, los proyectos siguen midiéndose por cifra.
+    console.error('conteo de hitos:', e.message);
+  }
+  return mapa;
 }
 
 // La jerarquía se limita a un nivel (marca → trabajos). Con eso basta para
@@ -445,10 +477,120 @@ async function padreValido(id, padreId) {
 app.get('/proyectos', async (req, res) => {
   try {
     const { rows } = await db('SELECT * FROM proyectos ORDER BY id');
-    const auto = await valoresAutomaticos();
-    res.json(decorarProyectos(aplicarFuentes(rows, auto)));
+    const [auto, tareas] = await Promise.all([valoresAutomaticos(), contarTareas()]);
+    res.json(decorarProyectos(aplicarFuentes(rows, auto), tareas));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// ── HITOS ────────────────────────────────────────────────
+// Todos de una vez: la pantalla pinta las casillas sin una llamada por
+// tarjeta, que en el móvil se nota.
+app.get('/tareas', async (req, res) => {
+  try {
+    const { rows } = await db(
+      `SELECT id, proyecto_id, texto, hecha, fecha_limite, orden, completada_en
+         FROM proyecto_tareas ORDER BY proyecto_id, hecha, orden, id`);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/proyectos/:id/tareas', async (req, res) => {
+  try {
+    const { rows } = await db(
+      `SELECT id, texto, hecha, fecha_limite, orden, completada_en
+         FROM proyecto_tareas WHERE proyecto_id=$1
+        ORDER BY hecha, orden, id`, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/proyectos/:id/tareas', async (req, res) => {
+  const texto = (req.body?.texto || '').trim();
+  if (!texto) return res.status(400).json({ error: 'Escribe el hito' });
+  try {
+    const { rows: [ult] } = await db(
+      'SELECT COALESCE(MAX(orden), 0) AS n FROM proyecto_tareas WHERE proyecto_id=$1',
+      [req.params.id]);
+    const { rows } = await db(
+      `INSERT INTO proyecto_tareas (proyecto_id, texto, fecha_limite, orden)
+       VALUES ($1,$2,$3,$4) RETURNING *`,
+      [req.params.id, texto, req.body?.fecha_limite || null, Number(ult.n) + 1]);
+    await db('UPDATE proyectos SET updated_at=NOW() WHERE id=$1', [req.params.id]);
+    notionPushDiferido();
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Marcar y desmarcar: el gesto de un toque que mueve el progreso.
+app.patch('/tareas/:id', async (req, res) => {
+  try {
+    const sets = [];
+    const vals = [];
+    if (req.body?.hecha !== undefined) {
+      const hecha = !!req.body.hecha;
+      vals.push(hecha);
+      sets.push(`hecha=$${vals.length}`);
+      // Al desmarcar se borra la fecha: si no, contaría como cerrado ese día.
+      vals.push(hecha ? hoyStr() : null);
+      sets.push(`completada_en=$${vals.length}`);
+    }
+    for (const campo of ['texto', 'fecha_limite', 'orden']) {
+      if (req.body?.[campo] !== undefined) {
+        vals.push(req.body[campo] === '' ? null : req.body[campo]);
+        sets.push(`${campo}=$${vals.length}`);
+      }
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
+
+    vals.push(req.params.id);
+    const { rows } = await db(
+      `UPDATE proyecto_tareas SET ${sets.join(', ')} WHERE id=$${vals.length} RETURNING *`, vals);
+    if (!rows.length) return res.status(404).json({ error: 'Hito no encontrado' });
+
+    await db('UPDATE proyectos SET updated_at=NOW() WHERE id=$1', [rows[0].proyecto_id]);
+    await volcarTareasDelDia();
+    notionPushDiferido();
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/tareas/:id', async (req, res) => {
+  try {
+    const { rows } = await db('DELETE FROM proyecto_tareas WHERE id=$1 RETURNING proyecto_id', [req.params.id]);
+    if (rows.length) {
+      await db('UPDATE proyectos SET updated_at=NOW() WHERE id=$1', [rows[0].proyecto_id]);
+      await volcarTareasDelDia();
+      notionPushDiferido();
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// El cruce lee `daily_logs.tareas_completadas` y `tareas_total`, que llevaban
+// vacías desde siempre. Cada vez que se marca un hito se recalcula el día:
+// cerradas HOY frente a lo que sigue abierto, que es la foto del esfuerzo.
+async function volcarTareasDelDia() {
+  try {
+    const hoy = hoyStr();
+    const { rows: [c] } = await db(
+      `SELECT count(*) FILTER (WHERE hecha AND completada_en = $1) AS hoy_hechas,
+              count(*) FILTER (WHERE NOT hecha)                    AS abiertas
+         FROM proyecto_tareas`, [hoy]);
+    const hechas = Number(c.hoy_hechas);
+    const total  = hechas + Number(c.abiertas);
+
+    // UPDATE y si no hay fila, INSERT: la restricción única de daily_logs
+    // cambió a (usuario_id, fecha) en la v5 y un ON CONFLICT (fecha) fallaría.
+    const upd = await db(
+      'UPDATE daily_logs SET tareas_completadas=$2, tareas_total=$3 WHERE fecha=$1',
+      [hoy, hechas, total]);
+    if (!upd.rowCount) {
+      await db(
+        'INSERT INTO daily_logs (fecha, tareas_completadas, tareas_total) VALUES ($1,$2,$3)',
+        [hoy, hechas, total]);
+    }
+  } catch (e) { console.error('volcado de hitos al día:', e.message); }
+}
 
 // El catálogo lo sirve el backend para que el desplegable de la app y lo que
 // el backend sabe calcular no se separen nunca.
@@ -987,7 +1129,7 @@ async function notionPush() {
   if (!c.notion_db_proyectos) throw Object.assign(new Error('Falta crear la base en Notion'), { status: 400 });
 
   const { rows } = await db('SELECT * FROM proyectos ORDER BY id');
-  const proyectos = decorarProyectos(aplicarFuentes(rows, await valoresAutomaticos()));
+  const proyectos = decorarProyectos(aplicarFuentes(rows, await valoresAutomaticos()), await contarTareas());
   const nombrePorId = new Map(rows.map(p => [p.id, p.nombre]));
 
   const texto = v => (v ? [{ type: 'text', text: { content: String(v).slice(0, 1900) } }] : []);
@@ -1597,7 +1739,7 @@ app.get('/resumen/:fecha', async (req, res) => {
     // Y antes que lo más atrasado va lo que ni siquiera tiene fin declarado:
     // sin meta no hay forma de saber si eso avanza.
     const { rows: proyRows } = await db('SELECT * FROM proyectos').catch(() => ({ rows: [] }));
-    const hojas = decorarProyectos(aplicarFuentes(proyRows, await valoresAutomaticos()))
+    const hojas = decorarProyectos(aplicarFuentes(proyRows, await valoresAutomaticos()), await contarTareas())
       .filter(p => !p.es_padre && p.progreso_real < 100)
       .sort((a, b) => (a.sin_meta === b.sin_meta)
         ? a.progreso_real - b.progreso_real

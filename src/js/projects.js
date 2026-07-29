@@ -9,6 +9,8 @@
 let _editProjId = null;
 let _proyectos  = [];   // último GET, para poblar el modal sin volver a pedir
 let _fuentes    = [];   // catálogo de dónde puede salir el número (lo sirve el backend)
+let _tareas     = new Map();  // hitos por proyecto
+let _hitosAbiertos = new Set(); // proyectos con los hitos cerrados a la vista
 
 /* ── 1. RANGO Y FORMATO ─────────────────────────────────────────── */
 function getRank(progreso) {
@@ -73,6 +75,19 @@ function finHTML(p) {
 </div>`;
   }
 
+  // Sin cifra pero con hitos: un trabajo de cliente no se mide en unidades,
+  // se mide por lo que queda por cerrar.
+  if (p.tareas_total > 0) {
+    const quedan = p.tareas_total - p.tareas_hechas;
+    return `<div class="pm">
+  <div class="pm-meta">${esc(p.meta || 'Hitos por cerrar')}</div>
+  <div class="pm-cifra">
+    <strong>${p.tareas_hechas}</strong> de ${p.tareas_total} hitos
+    ${quedan > 0 ? `<span class="pm-falta">quedan ${quedan}</span>` : '<span class="pm-hecho">todo cerrado</span>'}
+  </div>${nota}
+</div>`;
+  }
+
   if (p.meta) {
     // Fin declarado pero sin número: sirve de norte, no de medida.
     return `<div class="pm"><div class="pm-meta">${esc(p.meta)}</div>
@@ -80,7 +95,85 @@ function finHTML(p) {
   }
 
   return `<button class="pm pm-vacia" onclick="updP(${p.id})">
-    SIN FIN DEFINIDO · ponle una meta</button>`;
+    SIN FIN DEFINIDO · ponle una meta o hitos</button>`;
+}
+
+/* ── 2b. HITOS ──────────────────────────────────────────────────── */
+/* La pieza que faltaba para que un proyecto se pueda trabajar y no solo
+   mirar. Marcar una casilla mueve el progreso, sella la fecha y alimenta
+   el cruce con sueño y entreno.                                       */
+function hitosHTML(p) {
+  if (p.es_padre) return '';                 // un padre resume, no se trabaja
+  const lista = (_tareas.get(p.id) || []);
+  const pendientes = lista.filter(t => !t.hecha);
+  const hechas     = lista.filter(t => t.hecha);
+  const hoy        = new Date().toISOString().slice(0, 10);
+
+  const fila = t => {
+    const tarde = !t.hecha && t.fecha_limite && t.fecha_limite.slice(0, 10) < hoy;
+    return `<li class="hito${t.hecha ? ' hito-ok' : ''}${tarde ? ' hito-tarde' : ''}">
+      <button class="hito-box" onclick="marcarHito(${t.id}, ${!t.hecha})"
+              title="${t.hecha ? 'Desmarcar' : 'Marcar como hecho'}">${t.hecha ? '✓' : ''}</button>
+      <span class="hito-txt">${esc(t.texto)}</span>
+      ${t.fecha_limite ? `<span class="hito-fecha">${esc(t.fecha_limite.slice(5, 10))}</span>` : ''}
+      <button class="hito-del" onclick="borrarHito(${t.id})" title="Quitar">×</button>
+    </li>`;
+  };
+
+  // Los cerrados se pliegan: lo que importa es lo que queda.
+  const verHechas = _hitosAbiertos.has(p.id);
+  return `<div class="hitos">
+    <ul class="hito-lista">${pendientes.map(fila).join('')}</ul>
+    ${hechas.length ? `<button class="hito-toggle" onclick="toggleHechas(${p.id})">
+        ${verHechas ? 'ocultar' : 'ver'} ${hechas.length} cerrado${hechas.length === 1 ? '' : 's'}</button>
+      ${verHechas ? `<ul class="hito-lista">${hechas.map(fila).join('')}</ul>` : ''}` : ''}
+    <div class="hito-add">
+      <input type="text" id="hito-${p.id}" placeholder="+ añadir hito"
+             onkeydown="if(event.key==='Enter')anadirHito(${p.id})">
+    </div>
+  </div>`;
+}
+
+function toggleHechas(id) {
+  if (_hitosAbiertos.has(id)) _hitosAbiertos.delete(id);
+  else _hitosAbiertos.add(id);
+  loadP();
+}
+
+async function anadirHito(proyectoId) {
+  const el    = document.getElementById(`hito-${proyectoId}`);
+  const texto = el?.value.trim() || '';
+  if (!texto) return;
+  try {
+    const res = await api(`/proyectos/${proyectoId}/tareas`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ texto })
+    });
+    if (!res.ok) throw new Error('No se pudo añadir');
+    if (el) el.value = '';
+    loadP();
+  } catch (e) { toast(e.message || 'Error al añadir el hito', 'error'); }
+}
+
+async function marcarHito(id, hecha) {
+  try {
+    const res = await api(`/tareas/${id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ hecha })
+    });
+    if (!res.ok) throw new Error('No se pudo marcar');
+    loadP();
+  } catch (e) { toast(e.message || 'Error al marcar', 'error'); }
+}
+
+async function borrarHito(id) {
+  try {
+    const res = await api(`/tareas/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('No se pudo quitar');
+    loadP();
+  } catch (e) { toast(e.message || 'Error al quitar', 'error'); }
 }
 
 /* ── 3. TARJETA ─────────────────────────────────────────────────── */
@@ -111,6 +204,7 @@ function cardHTML(p, esHijo = false) {
     <span class="pc-pct">${prog}%</span>
   </div>
   ${medirHTML(p)}
+  ${hitosHTML(p)}
   <button onclick="updP(${p.id})" class="bu pc-btn">ACTUALIZAR</button>
 </div>`;
 }
@@ -241,9 +335,22 @@ async function loadP() {
         .catch(() => []);
     }
 
-    const res  = await api('/proyectos');
+    // Proyectos e hitos en paralelo: la checklist se pinta con el primer
+    // render, sin una llamada por tarjeta.
+    const [res, resT] = await Promise.all([
+      api('/proyectos'),
+      api('/tareas').catch(() => null)
+    ]);
     const data = await res.json();
     _proyectos = Array.isArray(data) ? data : [];
+
+    _tareas = new Map();
+    if (resT?.ok) {
+      for (const t of await resT.json().catch(() => [])) {
+        if (!_tareas.has(t.proyecto_id)) _tareas.set(t.proyecto_id, []);
+        _tareas.get(t.proyecto_id).push(t);
+      }
+    }
 
     if (!_proyectos.length) {
       pl.innerHTML = formHTML() + '<div class="empty-state">Sin proyectos activos</div>';

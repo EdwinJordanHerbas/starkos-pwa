@@ -1325,6 +1325,94 @@
 .mc-form.open { display: block; }
 .mc-btn       { margin-top: 10px; height: 40px; font-size: 11px; letter-spacing: 1.5px; }
 
+/* ── HITOS ─────────────────────────────────────────────────────── */
+.hitos { margin-top: 10px; }
+
+.hito-lista { list-style: none; margin: 0; padding: 0; }
+
+.hito {
+  display:     flex;
+  align-items: center;
+  gap:         8px;
+  padding:     5px 0;
+}
+
+/* La casilla es el gesto principal: grande para el pulgar */
+.hito-box {
+  flex-shrink:   0;
+  width:         20px;
+  height:        20px;
+  border-radius: 6px;
+  border:        1px solid rgba(255, 255, 255, 0.20);
+  background:    transparent;
+  color:         var(--brand-soft);
+  font-size:     12px;
+  line-height:   1;
+  cursor:        pointer;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+}
+
+.hito-box:hover { border-color: var(--brand); }
+
+.hito-txt {
+  flex:        1;
+  font-family: var(--font-sans);
+  font-size:   11px;
+  color:       var(--text-2);
+}
+
+.hito-ok .hito-box { background: var(--brand); border-color: var(--brand); color: #fff; }
+.hito-ok .hito-txt { color: var(--text-4); text-decoration: line-through; }
+
+.hito-fecha {
+  font-family: var(--font-mono);
+  font-size:   9px;
+  color:       var(--text-4);
+}
+
+.hito-tarde .hito-fecha { color: var(--danger); }
+
+.hito-del {
+  background: none;
+  border:     none;
+  color:      var(--text-4);
+  font-size:  14px;
+  cursor:     pointer;
+  padding:    0 2px;
+  opacity:    0;
+  transition: opacity .15s;
+}
+
+.hito:hover .hito-del { opacity: 1; }
+
+.hito-toggle {
+  background:     none;
+  border:         none;
+  color:          var(--text-4);
+  font-family:    var(--font-sans);
+  font-size:      9px;
+  letter-spacing: 0.5px;
+  cursor:         pointer;
+  padding:        4px 0;
+}
+
+.hito-add input {
+  width:         100%;
+  background:    transparent;
+  border:        none;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
+  color:         var(--text-2);
+  font-family:   var(--font-sans);
+  font-size:     11px;
+  padding:       6px 0;
+  margin-top:    2px;
+}
+
+.hito-add input::placeholder { color: var(--text-4); }
+.hito-add input:focus { outline: none; border-bottom-color: var(--brand); }
+
 /* Estado del puente con Notion */
 .notion-estado {
   font-family:   var(--font-sans);

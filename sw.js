@@ -3,7 +3,7 @@
 //  Â· EstÃ¡ticos (css/js/iconos/fuentes): cache-first con actualizaciÃ³n en segundo plano
 //  Â· NavegaciÃ³n (index.html): network-first con fallback a cachÃ© (offline)
 //  Â· API (/logs, /rutinas, ...): siempre red â€” nunca cachear datos
-const VERSION = 'okiro-v6.4.2';
+const VERSION = 'okiro-v6.5.0';
 const STATIC_CACHE = `${VERSION}-static`;
 
 const PRECACHE = [
@@ -27,7 +27,7 @@ const PRECACHE = [
 // Rutas de API â€” nunca pasan por cachÃ©
 const API_PREFIXES = ['/logs', '/proyectos', '/rutinas', '/ejercicios', '/sesiones',
                       '/nutricion', '/strava', '/notion', '/ia', '/auth', '/health',
-                      '/resumen', '/push', '/cruce', '/party', '/medidas'];   // /resumen faltaba: se cacheaba el dashboard de HOY como si fuera estatico
+                      '/resumen', '/push', '/cruce', '/party', '/tareas', '/medidas'];   // /resumen faltaba: se cacheaba el dashboard de HOY como si fuera estatico
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
