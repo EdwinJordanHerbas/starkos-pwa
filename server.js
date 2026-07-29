@@ -411,9 +411,13 @@ app.post('/mision/:fecha/:accion', async (req, res) => {
   try {
     const fecha = req.params.fecha === 'hoy' ? hoyStr() : req.params.fecha;
     await misionDelDia(fecha);   // se asegura de que existe
+    // La condición va como booleano ya resuelto: usar $1 a la vez como valor
+    // de una columna VARCHAR y dentro de un CASE hace que Postgres deduzca
+    // dos tipos para el mismo parámetro y rechace la consulta.
     await db(
-      `UPDATE misiones SET estado=$1, aceptada_en=CASE WHEN $1='aceptada' THEN NOW() ELSE aceptada_en END
-        WHERE fecha=$2`, [estado, fecha]);
+      `UPDATE misiones SET estado=$1,
+              aceptada_en = CASE WHEN $2 THEN NOW() ELSE aceptada_en END
+        WHERE fecha=$3`, [estado, estado === 'aceptada', fecha]);
     res.json(await misionDelDia(fecha));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
