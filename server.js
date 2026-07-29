@@ -454,13 +454,36 @@ function nivelDesdeXP(xp) {
 
 // El rango sale de la racha, no del nivel: es lo que ya hacía la app y lo que
 // hace que romper la constancia se note de verdad.
+const UMBRAL_RANGO = [['E', 0], ['D', 3], ['C', 7], ['B', 14], ['A', 30], ['S', 60]];
+
 function rangoDesdeRacha(n) {
-  if (n >= 60) return 'S';
-  if (n >= 30) return 'A';
-  if (n >= 14) return 'B';
-  if (n >= 7)  return 'C';
-  if (n >= 3)  return 'D';
-  return 'E';
+  let r = 'E';
+  for (const [letra, dias] of UMBRAL_RANGO) if (n >= dias) r = letra;
+  return r;
+}
+
+// Qué falta para el siguiente rango: sin esto ves una "E" y no sabes si estás
+// cerca o lejos de la D.
+function siguienteRango(racha) {
+  const sig = UMBRAL_RANGO.find(([, dias]) => dias > racha);
+  return sig ? { rango: sig[0], dias: sig[1] - racha } : null;
+}
+
+// De dónde sale el XP de un día. Se devuelve desglosado porque hoy nadie sabe
+// que un entreno son 40 puntos y la nota del día 5.
+function desgloseXP(l) {
+  if (!l) return [];
+  const d = [];
+  if (l.entreno_completado) d.push({ que: 'Entreno completado', xp: 40 });
+  const s = parseFloat(l.sueno) || 0;
+  if (s >= 7)     d.push({ que: `Sueño ${s} h`, xp: 15 });
+  else if (s > 0) d.push({ que: `Sueño ${s} h`, xp: 5 });
+  const e = parseInt(l.energia)   || 0; if (e) d.push({ que: 'Energía',   xp: e });
+  const n = parseInt(l.nutricion) || 0; if (n) d.push({ que: 'Nutrición', xp: n });
+  const t = parseInt(l.tareas_completadas) || 0;
+  if (t) d.push({ que: `${t} hito${t !== 1 ? 's' : ''} cerrado${t !== 1 ? 's' : ''}`, xp: t * 8 });
+  if (l.notas && String(l.notas).trim()) d.push({ que: 'Nota del día', xp: 5 });
+  return d;
 }
 
 // Cierra las misiones de días pasados que quedaron sin resultado. No depende
@@ -506,8 +529,10 @@ async function calcularProgreso() {
 
   const xpLogs = logs.reduce((a, l) => a + xpDelDia(l), 0);
   const { rows: [mis] } = await db(
-    'SELECT COALESCE(SUM(xp_bonus), 0) AS xp, count(*) FILTER (WHERE resultado = $1) AS falladas FROM misiones',
-    ['fallada']).catch(() => ({ rows: [{ xp: 0, falladas: 0 }] }));
+    `SELECT COALESCE(SUM(xp_bonus), 0)                AS xp,
+            count(*) FILTER (WHERE resultado = 'fallada')  AS falladas,
+            count(*) FILTER (WHERE resultado = 'cumplida') AS cumplidas
+       FROM misiones`).catch(() => ({ rows: [{ xp: 0, falladas: 0, cumplidas: 0 }] }));
 
   // El XP puede bajar: si no, fallar la misión no costaría nada.
   const xp    = Math.max(0, xpLogs + Number(mis.xp));
@@ -523,6 +548,8 @@ async function calcularProgreso() {
             penalizaciones=$6, actualizado=NOW() WHERE usuario_id=1`,
     [xp, nivel, rango, racha, mejor, Number(mis.falladas)]);
 
+  const hoyLog = logs.find(l => String(l.fecha).slice(0, 10) === hoyStr());
+
   return {
     xp, nivel, rango, racha,
     mejor_racha: mejor,
@@ -530,7 +557,13 @@ async function calcularProgreso() {
     xp_para_subir: necesita,
     penalizaciones: Number(mis.falladas),
     // Lo devuelve para que la app sepa si hoy arrastra castigo.
-    rango_anterior: prev?.rango || 'E'
+    rango_anterior: prev?.rango || 'E',
+    // Para la ventana de estado
+    siguiente: siguienteRango(racha),
+    misiones_cumplidas: Number(mis.cumplidas),
+    misiones_falladas:  Number(mis.falladas),
+    xp_hoy: desgloseXP(hoyLog),
+    xp_hoy_total: hoyLog ? xpDelDia(hoyLog) : 0
   };
 }
 

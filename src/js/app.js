@@ -677,10 +677,79 @@ function closeMissionModal() {
 }
 
 /* ── 14. MODAL DE MISIÓN DIARIA ─────────────────────────────────── */
+/* ── VENTANA DE ESTADO ──────────────────────────────────────────── */
+/* La cabecera pedía ser pulsada y no hacía nada. Ahora el aura y la barra de
+   XP abren el estado: qué falta para el siguiente rango, de dónde sale el XP
+   de hoy y cómo va el historial de misiones. Todo sale de /progreso. */
+async function abrirEstado() {
+  const overlay = document.getElementById('estado-overlay');
+  const body    = document.getElementById('estado-body');
+  if (!overlay || !body) return;
+
+  overlay.style.display = 'flex';
+  body.innerHTML = '<p class="mm-no-data">Cargando...</p>';
+
+  let p = null;
+  try {
+    const res = await api('/progreso');
+    p = res.ok ? await res.json() : null;
+  } catch {}
+  if (!p) { body.innerHTML = '<p class="mm-no-data">Sin conexión con el sistema</p>'; return; }
+
+  const fila = (k, v, resalta) =>
+    `<div class="est-fila"><span class="est-k">${k}</span><span class="est-v${resalta ? ' est-alto' : ''}">${v}</span></div>`;
+
+  const dias = n => `${n} ${n === 1 ? 'día' : 'días'}`;
+
+  body.innerHTML = `
+    <div class="est-cabecera">
+      <div class="est-rango rank-badge rank-${p.rango.toLowerCase()}">${p.rango}</div>
+      <div class="est-lvl">LVL ${p.nivel}<span>${p.xp} XP</span></div>
+    </div>
+
+    <div class="est-sep">CONSTANCIA</div>
+    ${fila('Racha actual', dias(p.racha), p.racha > 0)}
+    ${p.siguiente
+      ? fila(`Para rango ${p.siguiente.rango}`, dias(p.siguiente.dias) + ' más')
+      : fila('Rango', 'máximo alcanzado', true)}
+    ${fila('Mejor racha', dias(p.mejor_racha))}
+
+    <div class="est-sep">NIVEL</div>
+    ${fila('Para subir', `${p.xp_para_subir - p.xp_en_nivel} XP`)}
+    ${fila('XP de hoy', `${p.xp_hoy_total}`, p.xp_hoy_total > 0)}
+    ${p.xp_hoy.length
+      ? `<ul class="est-xp">${p.xp_hoy.map(x => `<li><span>${x.que}</span><span>+${x.xp}</span></li>`).join('')}</ul>`
+      : '<p class="est-vacio">Hoy aún no has sumado. Entrena, registra el sueño o cierra un hito.</p>'}
+
+    <div class="est-sep">MISIONES</div>
+    ${fila('Cumplidas', p.misiones_cumplidas, p.misiones_cumplidas > 0)}
+    ${fila('Falladas', p.misiones_falladas)}`;
+}
+
+function cerrarEstado() {
+  const overlay = document.getElementById('estado-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+/* Reabrir la misión del día: una vez cerrada no había forma de volver a verla. */
+function verMisionHoy() {
+  cerrarEstado();
+  showMissionModal(true);
+}
+
+/* El reloj devuelve al día de hoy desde cualquier fecha que estuvieras viendo. */
+function volverAHoy() {
+  if (typeof currentViewDate !== 'undefined') currentViewDate = new Date();
+  const btn = document.querySelector('.nb[data-sec=hoy]');
+  ss('hoy', btn);
+  if (typeof loadResumenDia === 'function') loadResumenDia(hoyISO());
+}
+
 /* La misión del día: objetivos de todos los ámbitos, no solo del gym, y que
    se cumplen solos al vivir el día. ACEPTAR y RECHAZAR hacen cosas distintas
-   y quedan registrados — antes los dos botones llamaban a la misma función. */
-async function showMissionModal() {
+   y quedan registrados — antes los dos botones llamaban a la misma función.
+   Con `forzar` se reabre desde la ventana de estado aunque ya esté decidida. */
+async function showMissionModal(forzar = false) {
   const todayStr = hoyISO();
 
   const overlay  = document.getElementById('mission-overlay');
@@ -696,10 +765,13 @@ async function showMissionModal() {
     m = res.ok ? await res.json() : null;
   } catch { /* sin conexión: se decide abajo */ }
 
-  // Ya decidida hoy: no se vuelve a preguntar. Si aún está ofrecida, se
+  // Ya decidida hoy: no se vuelve a preguntar sola. Si aún está ofrecida, se
   // pregunta aunque hayas abierto la app antes — la decisión es el punto.
-  if (m && m.estado !== 'ofrecida') return;
-  if (!m && localStorage.getItem('missionShown') === todayStr) return;
+  // Al reabrirla a mano desde el estado, se muestra siempre.
+  if (!forzar) {
+    if (m && m.estado !== 'ofrecida') return;
+    if (!m && localStorage.getItem('missionShown') === todayStr) return;
+  }
 
   overlay.style.display = 'flex';
   // Si ayer se falló, hoy la misión viene con castigo: más exigente y avisando.

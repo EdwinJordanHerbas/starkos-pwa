@@ -289,3 +289,119 @@
     transform: scale(1) translateY(0);
   }
 }
+
+/* ── VENTANA DE ESTADO ─────────────────────────────────────────────
+   Misma piel que el modal de misión: es el mismo "sistema" hablando. */
+#estado-overlay {
+  position:                fixed;
+  inset:                   0;
+  z-index:                 10000;
+  background:              rgba(0, 0, 0, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter:         blur(8px);
+  display:                 flex;
+  align-items:             center;
+  justify-content:         center;
+  padding:                 20px;
+  animation:               modalFade 0.3s ease forwards;
+}
+
+#estado-modal {
+  background:              rgba(20, 20, 26, 0.85);
+  -webkit-backdrop-filter: blur(60px) saturate(200%);
+  backdrop-filter:         blur(60px) saturate(200%);
+  border-radius:           var(--radius-xl);
+  padding:                 26px;
+  max-width:               380px;
+  width:                   100%;
+  max-height:              calc(100vh - 40px);
+  overflow-y:              auto;
+  position:                relative;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1.5px 0 rgba(0, 0, 0, 0.6),
+    0 0 0 0.5px rgba(139, 77, 255, 0.3),
+    0 24px 60px rgba(0, 0, 0, 0.8),
+    0 0 32px rgba(139, 77, 255, 0.2);
+  animation:               modalIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.est-cabecera {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  margin-bottom:   18px;
+}
+
+.est-rango { font-size: 22px; padding: 6px 16px; }
+
+.est-lvl {
+  font-family: var(--font-sans);
+  font-size:   13px;
+  color:       var(--text-2);
+  text-align:  right;
+}
+
+.est-lvl span {
+  display:     block;
+  font-family: var(--font-mono);
+  font-size:   10px;
+  color:       var(--text-4);
+  margin-top:  2px;
+}
+
+.est-sep {
+  font-family:    var(--font-sans);
+  font-size:      9px;
+  font-weight:    700;
+  letter-spacing: 2px;
+  color:          var(--brand-soft);
+  text-transform: uppercase;
+  margin:         16px 0 8px;
+  padding-top:    10px;
+  border-top:     1px solid rgba(139, 77, 255, 0.14);
+}
+
+.est-fila {
+  display:         flex;
+  justify-content: space-between;
+  align-items:     baseline;
+  padding:         5px 0;
+  font-family:     var(--font-sans);
+  font-size:       12px;
+}
+
+.est-k { color: var(--text-3); }
+.est-v { color: var(--text-2); font-family: var(--font-mono); }
+.est-alto { color: var(--brand-soft); }
+
+/* Desglose del XP de hoy: enseña qué suma, que es lo que nadie sabía */
+.est-xp {
+  list-style: none;
+  margin:     6px 0 0;
+  padding:    0;
+}
+
+.est-xp li {
+  display:         flex;
+  justify-content: space-between;
+  font-family:     var(--font-sans);
+  font-size:       11px;
+  color:           var(--text-4);
+  padding:         3px 0 3px 10px;
+  border-left:     1px solid rgba(139, 77, 255, 0.2);
+}
+
+.est-xp li span:last-child { color: var(--brand-soft); font-family: var(--font-mono); }
+
+.est-vacio {
+  font-family: var(--font-sans);
+  font-size:   11px;
+  color:       var(--text-4);
+  line-height: 1.5;
+  margin:      6px 0 0;
+}
+
+/* La cabecera ahora responde al toque */
+#hdr-brand, #xp-row, #hdr-right { cursor: pointer; }
+#hdr-brand:active, #xp-row:active, #hdr-right:active { opacity: 0.7; }

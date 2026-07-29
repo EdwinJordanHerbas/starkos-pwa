@@ -45,6 +45,21 @@
   </div>
 </div>
 
+<!-- Ventana de ESTADO: se abre tocando el aura o el chip de rango. La cabecera
+     pedía ser pulsada y no hacía nada; ahora es donde vives tu progreso. -->
+<div id="estado-overlay" style="display:none" onclick="if(event.target===this)cerrarEstado()">
+  <div id="estado-modal">
+    <div class="mm-corner" style="top:0;left:0"></div>
+    <div class="mm-corner" style="top:0;right:0"></div>
+    <div class="mm-corner" style="bottom:0;left:0"></div>
+    <div class="mm-corner" style="bottom:0;right:0"></div>
+    <div class="mm-title" id="estado-titulo">ESTADO</div>
+    <div id="estado-body"></div>
+    <button class="mm-btn-accept" onclick="verMisionHoy()">VER MISIÓN DE HOY</button>
+    <button class="mm-btn-skip" onclick="cerrarEstado()">CERRAR</button>
+  </div>
+</div>
+
 <div id="mission-overlay" style="display:none">
   <div id="mission-modal">
     <div class="mm-corner" style="top:0;left:0"></div>
@@ -155,7 +170,7 @@
 <div id="app">
  <div id="hdr">
   <div id="hdr-top">
-   <div id="hdr-brand">
+   <div id="hdr-brand" onclick="abrirEstado()" title="Ver estado">
     <!-- 34px y no 26: a 26 el cambio de rango no se distinguía a simple vista -->
     <svg viewBox="0 0 100 100" width="34" height="34" aria-hidden="true" id="hdr-mark">
      <defs><clipPath id="hdr-hz"><rect x="0" y="0" width="100" height="62"/></clipPath></defs>
@@ -165,9 +180,10 @@
     </svg>
     <div><p id="fh">HOY</p><h1>OKIRO</h1></div>
    </div>
-   <div id="hdr-right"><div id="clk">00:00</div><span id="lvl-label">LVL 1</span></div>
+   <!-- El reloj devuelve a HOY: si estabas mirando el martes pasado, un toque -->
+   <div id="hdr-right" onclick="volverAHoy()" title="Volver a hoy"><div id="clk">00:00</div><span id="lvl-label">LVL 1</span></div>
   </div>
-  <div id="xp-row">
+  <div id="xp-row" onclick="abrirEstado()" title="Ver estado">
    <span id="rank-chip" class="rank-badge rank-d">D</span>
    <div id="xp-bar"><div id="xp-fill"></div></div>
    <span id="xp-text">0 / 80 XP</span>
