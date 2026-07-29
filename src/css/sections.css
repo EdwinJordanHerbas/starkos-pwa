@@ -329,6 +329,18 @@
   transition:    box-shadow 0.25s ease, background 0.25s ease;
 }
 
+/* La tarjeta de Inglés es un enlace a tutoringles: mismo aspecto que las
+   demás, pero sin el subrayado ni el color de enlace del navegador. */
+a.hoy-check-card {
+  text-decoration: none;
+  color:           inherit;
+  cursor:          pointer;
+}
+
+a.hoy-check-card:hover {
+  box-shadow: inset 0 0 0 0.5px rgba(139, 77, 255, 0.45);
+}
+
 .hoy-card-icon {
   font-size:   18px;
   flex-shrink: 0;

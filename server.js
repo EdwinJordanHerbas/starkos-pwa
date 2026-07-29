@@ -324,6 +324,10 @@ const FUENTES = {
   grasa_pct:       { etiqueta: 'Grasa corporal (última medida)', unidad: '%' },
   peso:            { etiqueta: 'Peso (última medida)',         unidad: 'kg' },
   // Idiomas: los lee de tutoringles, que corre en el mismo Postgres.
+  // `empezadas` va primero a propósito: una palabra tarda semanas en llegar a
+  // "dominada", así que medir solo eso deja el proyecto a 0% aunque estudies
+  // cada día. Empezadas sube en la misma sesión; dominadas es el fin del C1.
+  ingles_empezadas:   { etiqueta: 'Inglés · palabras empezadas',    unidad: 'palabras' },
   ingles_palabras:    { etiqueta: 'Inglés · palabras dominadas',    unidad: 'palabras' },
   ingles_situaciones: { etiqueta: 'Inglés · situaciones superadas', unidad: 'situaciones' },
   ingles_racha:       { etiqueta: 'Inglés · días seguidos estudiando', unidad: 'días seguidos' }
@@ -359,11 +363,19 @@ async function valoresIngles() {
   if (!poolTutor) return v;
   try {
     const [pal, sit, ses] = await Promise.all([
-      dbTutor(`SELECT count(*) FILTER (WHERE status = 'mastered') AS n FROM user_words`),
+      dbTutor(`SELECT count(*) FILTER (WHERE status = 'mastered')  AS dominadas,
+                      count(*) FILTER (WHERE status <> 'new')      AS empezadas,
+                      count(*)                                     AS total,
+                      count(*) FILTER (WHERE next_review_date <= CURRENT_DATE) AS repasos
+                 FROM user_words`),
       dbTutor('SELECT count(*) AS n FROM situation_progress WHERE completed'),
       dbTutor('SELECT DISTINCT date FROM study_sessions ORDER BY date DESC LIMIT 400')
     ]);
-    v.ingles_palabras    = Number(pal.rows[0].n);
+    const w = pal.rows[0];
+    v.ingles_palabras    = Number(w.dominadas);
+    v.ingles_empezadas   = Number(w.empezadas);
+    v.ingles_total       = Number(w.total);
+    v.ingles_repasos_hoy = Number(w.repasos);
     v.ingles_situaciones = Number(sit.rows[0].n);
     v.ingles_racha       = rachaDeDias(ses.rows.map(r => r.date));
   } catch (e) {
@@ -1799,6 +1811,23 @@ app.get('/resumen/:fecha', async (req, res) => {
     const proyectos_sin_meta   = hojas.filter(p => p.sin_meta).length;
     const proyecto_prioritario = hojas[0]?.nombre || null;
 
+    // ── 6b. Inglés ───────────────────────────────────────
+    // OKIRO no enseña idiomas: mide y recuerda. La tarjeta de HOY dice si
+    // quedan repasos y lleva a tutoringles, que es donde se estudia.
+    const ing = await valoresIngles();
+    const proyIngles = proyRows.find(p => (p.fuente || '').startsWith('ingles'));
+    const ingles = ing.ingles_total != null ? {
+      repasos_hoy: ing.ingles_repasos_hoy,
+      empezadas:   ing.ingles_empezadas,
+      dominadas:   ing.ingles_palabras,
+      total:       ing.ingles_total,
+      racha:       ing.ingles_racha,
+      // El enlace sale del proyecto, no está escrito en el código: si cambia
+      // el dominio se cambia en la app y la tarjeta lo sigue.
+      url:         proyIngles?.url || null,
+      nombre:      proyIngles?.nombre || 'Inglés'
+    } : null;
+
     // ── 7. Score de energía ──────────────────────────────
     const sueno_score = Math.min(1, (sueno_horas || 0) / 8) * 40;
     const nutri_ratio = calorias_objetivo > 0 ? Math.min(1, calorias_consumidas / calorias_objetivo) : 0;
@@ -1821,7 +1850,8 @@ app.get('/resumen/:fecha', async (req, res) => {
       nota,
       proyectos_activos,
       proyectos_sin_meta,
-      proyecto_prioritario
+      proyecto_prioritario,
+      ingles
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

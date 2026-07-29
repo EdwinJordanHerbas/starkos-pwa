@@ -31,7 +31,8 @@ const OKICON = {
   cross:    _ok('<path d="M6 6l12 12M18 6L6 18"/>'),
   circle:   _ok('<circle cx="12" cy="12" r="7"/>'),
   alert:    _ok('<path d="M12 7v6M12 17h.01"/><circle cx="12" cy="12" r="9"/>'),
-  gear:     _ok('<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.6 7.5l1.7 1M17.7 15.5l1.7 1M4.6 16.5l1.7-1M17.7 8.5l1.7-1"/>')
+  gear:     _ok('<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.6 7.5l1.7 1M17.7 15.5l1.7 1M4.6 16.5l1.7-1M17.7 8.5l1.7-1"/>'),
+  idioma:   _ok('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/>')
 };
 
 /* ── 2. API ─────────────────────────────────────────────────────── */
@@ -366,6 +367,32 @@ function renderChecklist(d) {
     ? `${d.proyectos_activos} activo${d.proyectos_activos !== 1 ? 's' : ''}${d.proyecto_prioritario ? ' · ' + d.proyecto_prioritario : ''}`
     : 'Todo completado';
 
+  /* Inglés — OKIRO no enseña idiomas: dice si quedan repasos y lleva a
+     tutoringles, que es donde se estudia. Si no hay datos, no pinta nada. */
+  let inglesHTML = '';
+  if (d.ingles) {
+    const g       = d.ingles;
+    const pend    = g.repasos_hoy || 0;
+    const clase   = pend > 0 ? 'warning' : 'done';
+    const sub     = pend > 0
+      ? `${pend} repaso${pend !== 1 ? 's' : ''} te espera${pend !== 1 ? 'n' : ''}`
+      : `al día · ${g.empezadas} de ${g.total} palabras`;
+    const racha   = g.racha > 0 ? ` · racha ${g.racha}d` : '';
+    const abrible = /^https?:\/\//i.test(g.url || '');
+    // La tarjeta entera es el enlace: un toque desde HOY y estás estudiando.
+    const tag     = abrible ? 'a' : 'div';
+    const attrs   = abrible ? ` href="${g.url}" target="_blank" rel="noopener noreferrer"` : '';
+    inglesHTML = `
+    <${tag} class="hoy-check-card ${clase}"${attrs}>
+      <div class="hoy-card-icon">${OKICON.idioma}</div>
+      <div class="hoy-card-body">
+        <div class="hoy-card-title">Inglés</div>
+        <div class="hoy-card-sub">${sub}${racha}</div>
+      </div>
+      <div class="hoy-card-status">${pend > 0 ? pend : OKICON.check}</div>
+    </${tag}>`;
+  }
+
   el.innerHTML = `
     <div class="hoy-check-card ${gymClass}">
       <div class="hoy-card-icon">${OKICON.dumbbell}</div>
@@ -399,7 +426,8 @@ function renderChecklist(d) {
         <div class="hoy-card-sub">${projSub}</div>
       </div>
       <div class="hoy-card-status">${d.proyectos_activos}</div>
-    </div>`;
+    </div>
+    ${inglesHTML}`;
 }
 
 function renderStreakInfo() {
