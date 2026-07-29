@@ -545,17 +545,29 @@ function rankForStreak(n) {
 }
 
 /* El aura del símbolo de cabecera sube y se enciende con el rango */
-const AURA_COLOR = { E: '#4B4557', D: '#6D5A9E', C: '#8B4DFF', B: '#A472FF', A: '#C08BFF', S: '#E4C4FF' };
-const AURA_CY    = { E: 76, D: 70, C: 62, B: 58, A: 55, S: 52 };
+/* La escala vieja no se leía: de C a S el círculo solo subía 10 unidades de
+   100 y los tres tonos altos eran casi el mismo violeta. Ahora el recorrido
+   es amplio y regular (saltos de 8), los extremos se separan y el brillo
+   crece con el rango: en E el aura casi no asoma, en S sale entera. */
+const AURA_COLOR = { E: '#3A3545', D: '#6D5A9E', C: '#8B4DFF', B: '#A472FF', A: '#D2AEFF', S: '#F3E3FF' };
+const AURA_CY    = { E: 84, D: 76, C: 68, B: 60, A: 52, S: 44 };
+const AURA_GLOW  = { E: 0,  D: 1,  C: 2,  B: 3,  A: 4,  S: 6  };
 function setHdrAura(label) {
+  const mark  = document.getElementById('hdr-mark');
   const aura  = document.getElementById('hdr-aura');
   const faint = document.getElementById('hdr-faint');
   const cy    = AURA_CY[label] ?? 62;
+  const color = AURA_COLOR[label] || '#8B4DFF';
   if (aura) {
     aura.setAttribute('cy', cy);
-    aura.setAttribute('stroke', AURA_COLOR[label] || '#8B4DFF');
+    aura.setAttribute('stroke', color);
   }
   if (faint) faint.setAttribute('cy', cy);
+  // El halo es la segunda señal: el color solo no basta para leer el rango.
+  if (mark) {
+    const g = AURA_GLOW[label] ?? 0;
+    mark.style.filter = g ? `drop-shadow(0 0 ${g}px ${color})` : 'none';
+  }
 }
 
 /* El progreso ya no se calcula aquí: lo manda el servidor. Antes vivía en
