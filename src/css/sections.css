@@ -2155,3 +2155,25 @@ a.hoy-check-card:hover {
   color:       var(--warning);
   font-weight: 600;
 }
+
+/* El aliento: se lee, no grita. Va en el violeta de marca, no en verde de
+   "enhorabuena" — el sistema reconoce, no anima. */
+.mm-aliento {
+  font-family:   var(--font-sans);
+  font-size:     11px;
+  line-height:   1.5;
+  color:         var(--brand-soft);
+  background:    rgba(139, 77, 255, 0.10);
+  border-radius: 10px;
+  padding:       9px 11px;
+  margin:        10px 0 4px;
+  text-align:    left;
+}
+
+.hoy-mision-aliento {
+  font-family: var(--font-sans);
+  font-size:   10px;
+  line-height: 1.45;
+  color:       var(--brand-soft);
+  margin-top:  5px;
+}

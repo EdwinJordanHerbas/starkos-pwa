@@ -258,9 +258,13 @@ app.post('/push/tick', async (req, res) => {
            cumplida ? XP_MISION_CUMPLIDA : XP_MISION_FALLADA, hoy]);
         const p = await calcularProgreso();
         titulo = cumplida ? 'MISIÓN CUMPLIDA' : 'MISIÓN FALLADA';
+        // Al fallar, el aviso no se queda en el castigo: recuerda lo que lleva
+        // hecho. Un push que solo regaña es un push que se desactiva.
+        const aliento = await mensajeDeAliento(m, hoy);
         cuerpo = cumplida
-          ? `${m.total} de ${m.total} · +${XP_MISION_CUMPLIDA} XP · rango ${p.rango}`
-          : `${m.cumplidos} de ${m.total} · ${XP_MISION_FALLADA} XP · mañana, recuperación`;
+          ? `${m.total} de ${m.total} · +${XP_MISION_CUMPLIDA} XP · rango ${p.rango}. ${aliento}`
+          : `${m.cumplidos} de ${m.total} · ${XP_MISION_FALLADA} XP. ${aliento}`;
+        if (cuerpo.length > 200) cuerpo = cuerpo.slice(0, 197) + '...';
       } else if (m.total) {
         const pend = m.objetivos.filter(o => !o.cumplido);
         cuerpo = pend.length
@@ -536,9 +540,76 @@ app.get('/progreso', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── ALIENTO ──────────────────────────────────────────────
+// El sistema es exigente: la penalización se queda. Pero castigar en seco a
+// alguien que ya se ha caído no le devuelve al día siguiente. Al fallar, el
+// mensaje recuerda POR QUÉ empezó esto y qué lleva hecho — con sus datos
+// reales, no con frases de taza. Nada de "¡tú puedes!": el tono es el mismo
+// de siempre, sobrio.
+const ALIENTO_FALLO = [
+  'Caer no rompe el sistema. No volver, sí.',
+  'Un día perdido no borra lo construido.',
+  'Empezaste esto para volver a tu mejor versión. Sigue ahí.',
+  'El sistema no te abandona por un mal día.',
+  'Mañana no hay que empezar de cero: hay que seguir.'
+];
+
+const ALIENTO_PARCIAL = [
+  'No fue completo, pero fue.',
+  'Lo que hiciste sigue contando.',
+  'Medio camino también es camino.'
+];
+
+const ALIENTO_LOGRO = [
+  'El aura sube.',
+  'Así se gana el rango.',
+  'Otro día que el sistema registra.'
+];
+
+// Determinista por fecha: la misma frase todo el día, y rota entre días para
+// que no se convierta en ruido de fondo.
+const fraseDe = (lista, fecha) =>
+  lista[parseInt(String(fecha).replace(/-/g, ''), 10) % lista.length];
+
+async function mensajeDeAliento(m, fecha) {
+  const partes = [];
+  try {
+    const { rows: [p] } = await db('SELECT * FROM progreso WHERE usuario_id=1');
+
+    if (m.completa) {
+      partes.push(fraseDe(ALIENTO_LOGRO, fecha));
+      if (p?.racha > 1) partes.push(`${p.racha} días seguidos.`);
+      return partes.join(' ');
+    }
+
+    partes.push(m.cumplidos > 0
+      ? `${m.cumplidos} de ${m.total}. ${fraseDe(ALIENTO_PARCIAL, fecha)}`
+      : fraseDe(ALIENTO_FALLO, fecha));
+
+    // Lo que ya consiguió: la prueba de que es capaz es su propio historial.
+    if (p?.mejor_racha >= 3) partes.push(`Tu mejor racha son ${p.mejor_racha} días: ya lo hiciste una vez.`);
+    if (p?.xp > 0)           partes.push(`${p.xp} XP siguen ahí.`);
+
+    // Y hacia dónde va: el proyecto con fin declarado más cerca de su meta.
+    const { rows } = await db(
+      `SELECT nombre, meta, valor_actual, meta_valor, metrica
+         FROM proyectos
+        WHERE meta_valor > 0 AND valor_actual < meta_valor AND padre_id IS NULL
+        ORDER BY (valor_actual / meta_valor) DESC LIMIT 1`).catch(() => ({ rows: [] }));
+    if (rows.length) {
+      const r = rows[0];
+      partes.push(`${r.nombre}: ${(+r.valor_actual)} de ${(+r.meta_valor)} ${r.metrica || ''}. Ahí es donde vas.`);
+    }
+  } catch (e) { console.error('aliento:', e.message); }
+  return partes.join(' ');
+}
+
 app.get('/mision/:fecha?', async (req, res) => {
   try {
-    res.json(await misionDelDia(req.params.fecha || hoyStr()));
+    const fecha  = req.params.fecha || hoyStr();
+    const mision = await misionDelDia(fecha);
+    mision.mensaje = await mensajeDeAliento(mision, fecha);
+    res.json(mision);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -2130,6 +2201,7 @@ app.get('/resumen/:fecha', async (req, res) => {
     const mision = fecha === hoyStr()
       ? await misionDelDia(fecha).catch(e => { console.error('misión:', e.message); return null; })
       : null;
+    if (mision) mision.mensaje = await mensajeDeAliento(mision, fecha);
 
     // ── 6b. Inglés ───────────────────────────────────────
     // OKIRO no enseña idiomas: mide y recuerda. La tarjeta de HOY dice si

@@ -380,8 +380,9 @@ function renderChecklist(d) {
     <div class="hoy-check-card ${clase}">
       <div class="hoy-card-icon">${OKICON.alert}</div>
       <div class="hoy-card-body">
-        <div class="hoy-card-title">Misión${m.estado === 'aceptada' ? ' · aceptada' : ''}</div>
+        <div class="hoy-card-title">Misión${m.recuperacion ? ' · recuperación' : m.estado === 'aceptada' ? ' · aceptada' : ''}</div>
         <div class="hoy-card-sub">${sub}</div>
+        ${m.mensaje ? `<div class="hoy-mision-aliento">${m.mensaje}</div>` : ''}
       </div>
       <div class="hoy-card-status">${m.cumplidos}/${m.total}</div>
     </div>`;
@@ -691,6 +692,7 @@ async function showMissionModal() {
         </li>`).join('')}
       </ul>
       ${m.recuperacion ? '<p class="mm-nota mm-castigo">Ayer falló. Hoy se pide el doble.</p>' : ''}
+      ${m.mensaje ? `<p class="mm-aliento">${m.mensaje}</p>` : ''}
       <p class="mm-nota">Se cumplen solos: entrena, come, registra, cierra un hito o repasa.
         Cumplirla suma 50 XP; fallarla resta 25.</p>`;
   }
