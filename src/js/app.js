@@ -367,6 +367,26 @@ function renderChecklist(d) {
     ? `${d.proyectos_activos} activo${d.proyectos_activos !== 1 ? 's' : ''}${d.proyecto_prioritario ? ' · ' + d.proyecto_prioritario : ''}`
     : 'Todo completado';
 
+  /* Misión del día — la primera tarjeta, porque es el compromiso de hoy.
+     Los objetivos se marcan solos: aquí solo se ve cómo va. */
+  let misionHTML = '';
+  if (d.mision && d.mision.total) {
+    const m     = d.mision;
+    const clase = m.completa ? 'done' : m.estado === 'rechazada' ? '' : 'warning';
+    const sub   = m.estado === 'rechazada'
+      ? 'Rechazada hoy'
+      : m.objetivos.filter(o => !o.cumplido).map(o => o.texto).join(' · ') || 'Todo cumplido';
+    misionHTML = `
+    <div class="hoy-check-card ${clase}">
+      <div class="hoy-card-icon">${OKICON.alert}</div>
+      <div class="hoy-card-body">
+        <div class="hoy-card-title">Misión${m.estado === 'aceptada' ? ' · aceptada' : ''}</div>
+        <div class="hoy-card-sub">${sub}</div>
+      </div>
+      <div class="hoy-card-status">${m.cumplidos}/${m.total}</div>
+    </div>`;
+  }
+
   /* Inglés — OKIRO no enseña idiomas: dice si quedan repasos y lleva a
      tutoringles, que es donde se estudia. Si no hay datos, no pinta nada. */
   let inglesHTML = '';
@@ -394,6 +414,7 @@ function renderChecklist(d) {
   }
 
   el.innerHTML = `
+    ${misionHTML}
     <div class="hoy-check-card ${gymClass}">
       <div class="hoy-card-icon">${OKICON.dumbbell}</div>
       <div class="hoy-card-body">
@@ -629,67 +650,67 @@ function closeMissionModal() {
 }
 
 /* ── 14. MODAL DE MISIÓN DIARIA ─────────────────────────────────── */
+/* La misión del día: objetivos de todos los ámbitos, no solo del gym, y que
+   se cumplen solos al vivir el día. ACEPTAR y RECHAZAR hacen cosas distintas
+   y quedan registrados — antes los dos botones llamaban a la misma función. */
 async function showMissionModal() {
   const todayStr = hoyISO();
-  if (localStorage.getItem('missionShown') === todayStr) return;
 
   const overlay  = document.getElementById('mission-overlay');
   const bodyEl   = document.getElementById('mission-body');
   const typerEl  = document.getElementById('mm-typewriter');
   const acceptEl = document.getElementById('mm-accept');
-
+  const skipEl   = document.querySelector('.mm-btn-skip');
   if (!overlay) return;
-  overlay.style.display = 'flex';
 
-  if (typerEl) typewriterEffect(typerEl, 'SISTEMA DE MISIONES ACTIVADO', 35);
-
+  let m = null;
   try {
-    const [rutiRes, logRes] = await Promise.all([
-      api('/rutinas'),
-      api('/logs')
-    ]);
+    const res = await api('/mision');
+    m = res.ok ? await res.json() : null;
+  } catch { /* sin conexión: se decide abajo */ }
 
-    const rutinas = rutiRes.ok ? await rutiRes.json() : [];
-    const logs    = logRes.ok  ? await logRes.json()  : [];
+  // Ya decidida hoy: no se vuelve a preguntar. Si aún está ofrecida, se
+  // pregunta aunque hayas abierto la app antes — la decisión es el punto.
+  if (m && m.estado !== 'ofrecida') return;
+  if (!m && localStorage.getItem('missionShown') === todayStr) return;
 
-    const dow      = new Date().getDay();
-    const diaLabel = DIAS[dow];
+  overlay.style.display = 'flex';
+  if (typerEl) typewriterEffect(typerEl, 'MISIÓN DIARIA', 35);
 
-    const rutHoy = rutinas.find(r =>
-      Array.isArray(r.dias) && r.dias.map(d => d.toLowerCase()).includes(diaLabel)
-    );
-
-    const ayer    = new Date();
-    ayer.setDate(ayer.getDate() - 1);
-    const ayerStr = `${ayer.getFullYear()}-${String(ayer.getMonth()+1).padStart(2,'0')}-${String(ayer.getDate()).padStart(2,'0')}`;
-    const logAyer = logs.find(l => l.fecha && String(l.fecha).startsWith(ayerStr));
-
-    let html = '';
-    if (rutHoy) {
-      html += `<p style="margin-bottom:8px">
-        <span style="color:var(--text-3);font-size:10px">RUTINA HOY</span><br>
-        <strong>${rutHoy.nombre}</strong>
-      </p>`;
-    } else {
-      html += `<p style="color:var(--text-3);margin-bottom:8px">Sin rutina asignada hoy — descanso o cardio</p>`;
-    }
-
-    if (logAyer) {
-      html += `<p style="font-size:11px;color:var(--text-3);margin-top:8px">
-        AYER — ${logAyer.sueno || '?'}h ·
-        ${logAyer.entreno_completado ? 'ENTRENO OK' : 'DESCANSO'}
-      </p>`;
-    }
-
-    if (!html) html = '<p class="mm-no-data">SIN DATOS</p>';
-    if (bodyEl) bodyEl.innerHTML = html;
-
-  } catch {
-    if (bodyEl) bodyEl.innerHTML = '<p class="mm-no-data">Sin conexión con el sistema</p>';
+  if (!m || !m.total) {
+    if (bodyEl) bodyEl.innerHTML = '<p class="mm-no-data">Sin objetivos para hoy</p>';
+  } else if (bodyEl) {
+    bodyEl.innerHTML = `
+      <ul class="mm-objetivos">
+        ${m.objetivos.map(o => `<li class="mm-obj${o.cumplido ? ' mm-obj-ok' : ''}">
+          <span class="mm-obj-box">${o.cumplido ? '✓' : ''}</span>
+          <span class="mm-obj-txt">${o.texto}</span>
+        </li>`).join('')}
+      </ul>
+      <p class="mm-nota">Se cumplen solos: entrena, come, registra, cierra un hito o repasa.</p>`;
   }
 
   localStorage.setItem('missionShown', todayStr);
-  if (acceptEl) acceptEl.onclick = closeMissionModal;
+
+  const decidir = async accion => {
+    try {
+      await api(`/mision/hoy/${accion}`, { method: 'POST' });
+      toast(accion === 'aceptar' ? 'Misión aceptada' : 'Misión rechazada');
+    } catch {
+      toast('No se pudo registrar la decisión', 'error');
+    }
+    closeMissionModal();
+    loadResumenDia(hoyISO());   // la tarjeta de misión refleja la decisión
+  };
+
+  if (acceptEl) {
+    acceptEl.textContent = 'ACEPTAR MISIÓN';
+    acceptEl.onclick = () => decidir('aceptar');
+  }
+  if (skipEl) {
+    skipEl.textContent = 'RECHAZAR';
+    skipEl.onclick = () => decidir('rechazar');
+  }
 }
 
 /* ── 15. CARGA INICIAL DE DATOS ─────────────────────────────────── */

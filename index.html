@@ -53,8 +53,10 @@
     <div class="mm-corner" style="bottom:0;right:0"></div>
     <div class="mm-title" id="mm-typewriter"></div>
     <div class="mm-body" id="mission-body"></div>
-    <button class="mm-btn-accept" id="mm-accept">ACEPTAR MISIONES</button>
-    <button class="mm-btn-skip" onclick="closeMissionModal()">SALTAR</button>
+    <!-- Los dos botones los engancha showMissionModal(): aceptar y rechazar
+         registran la decisión, que antes ambos solo cerraban el modal. -->
+    <button class="mm-btn-accept" id="mm-accept">ACEPTAR MISIÓN</button>
+    <button class="mm-btn-skip">RECHAZAR</button>
   </div>
 </div>
 <div id="vignette"></div>

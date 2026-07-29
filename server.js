@@ -242,10 +242,179 @@ app.post('/push/tick', async (req, res) => {
     );
     if (!rowCount) return res.json({ ok: true, accion: 'nada', motivo: 'ya enviado' });
 
-    const r = tipo === 'cierre'
-      ? await enviarATodos('OKIRO', 'El aura no ha salido hoy.')
-      : await enviarATodos('OKIRO', 'Misión diaria disponible.');
+    // El aviso deja de ser un texto fijo: dice qué te espera y, al cerrar,
+    // cómo ha quedado. Si la misión falla, el push sigue saliendo.
+    let titulo = 'OKIRO';
+    let cuerpo = tipo === 'cierre' ? 'El aura no ha salido hoy.' : 'Misión diaria disponible.';
+    try {
+      const m = await misionDelDia(hoy);
+      if (tipo === 'cierre') {
+        await db(
+          `UPDATE misiones SET resultado=$1, cerrada_en=NOW() WHERE fecha=$2 AND resultado IS NULL`,
+          [m.completa ? 'cumplida' : 'fallada', hoy]);
+        titulo = m.completa ? 'MISIÓN CUMPLIDA' : 'MISIÓN FALLADA';
+        cuerpo = m.completa
+          ? `${m.total} de ${m.total} objetivos. El aura sube.`
+          : `${m.cumplidos} de ${m.total} objetivos. Mañana se recupera.`;
+      } else if (m.total) {
+        const pend = m.objetivos.filter(o => !o.cumplido);
+        cuerpo = pend.length
+          ? `${pend.length} objetivo${pend.length !== 1 ? 's' : ''}: ${pend.map(o => o.texto).join(' · ')}`
+          : 'Misión ya completa. Buen día.';
+      }
+    } catch (e) { console.error('misión en el push:', e.message); }
+
+    const r = await enviarATodos(titulo, cuerpo);
     res.json({ ok: true, accion: tipo, ...r });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════
+// MISIÓN DIARIA
+// ════════════════════════════════════════════════════════
+// El modal enseñaba la rutina de gym y tenía dos botones que llamaban a la
+// misma función, así que daba igual aceptar o saltar. Una misión de verdad
+// cubre todos los ámbitos, se acepta o se rechaza —y queda registrado—, y
+// sus objetivos se cumplen SOLOS al vivir el día: no hay nada que marcar.
+//
+// El cumplimiento no se guarda, se evalúa en vivo contra los datos reales.
+// Así no hay dos verdades que sincronizar: si entrenaste, está entrenado.
+
+// Objetivos del día a partir de lo que hay. Solo entra lo que tiene sentido
+// hoy: sin rutina no se pide entreno, sin repasos no se pide inglés.
+async function objetivosDelDia(fecha) {
+  const objetivos = [];
+
+  // 1. Entreno — solo si hoy toca rutina
+  const dDate = new Date(fecha + 'T12:00:00Z');
+  const diaLabel = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][dDate.getUTCDay()];
+  const { rows: rutinas } = await db('SELECT nombre, dias FROM rutinas').catch(() => ({ rows: [] }));
+  const rutinaHoy = rutinas.find(r => {
+    const dias = Array.isArray(r.dias) ? r.dias : (typeof r.dias === 'string' ? JSON.parse(r.dias) : []);
+    return dias.map(d => String(d).toLowerCase()).includes(diaLabel);
+  });
+  if (rutinaHoy) {
+    objetivos.push({ clave: 'entreno', texto: `Completar la rutina ${rutinaHoy.nombre}`, meta: 1 });
+  }
+
+  // 2. Proteína — el objetivo diario de siempre
+  objetivos.push({ clave: 'proteina', texto: 'Llegar a 160 g de proteína', meta: 160 });
+
+  // 3. Descanso — registrar el sueño es lo que sostiene todo el cruce
+  objetivos.push({ clave: 'sueno', texto: 'Registrar el sueño de la noche', meta: 1 });
+
+  // 4. Proyectos — cerrar un hito del que más lo necesita
+  const { rows: proyRows } = await db('SELECT * FROM proyectos').catch(() => ({ rows: [] }));
+  const hojas = decorarProyectos(aplicarFuentes(proyRows, await valoresAutomaticos()), await contarTareas())
+    .filter(p => !p.es_padre && p.progreso_real < 100 && p.tareas_total > p.tareas_hechas)
+    .sort((a, b) => a.progreso_real - b.progreso_real);
+  if (hojas.length) {
+    objetivos.push({ clave: 'hito', texto: `Cerrar un hito de ${hojas[0].nombre}`, meta: 1 });
+  }
+
+  // 5. Idioma — solo si de verdad hay repasos esperando
+  const ing = await valoresIngles();
+  if (ing.ingles_repasos_hoy > 0) {
+    const cuantas = Math.min(20, ing.ingles_repasos_hoy);
+    objetivos.push({ clave: 'ingles', texto: `Repasar ${cuantas} palabras de inglés`, meta: cuantas });
+  }
+
+  return objetivos.map((o, i) => ({ ...o, orden: i }));
+}
+
+// Cuánto llevas de cada objetivo, leído de los datos de verdad.
+async function progresoObjetivos(fecha, objetivos) {
+  const val = {};
+
+  if (objetivos.some(o => o.clave === 'entreno')) {
+    const { rows } = await db('SELECT completada FROM sesiones_gym WHERE fecha=$1', [fecha])
+      .catch(() => ({ rows: [] }));
+    val.entreno = rows.some(r => r.completada) ? 1 : 0;
+  }
+  if (objetivos.some(o => o.clave === 'proteina')) {
+    const { rows } = await db('SELECT proteinas FROM comidas WHERE fecha=$1', [fecha])
+      .catch(() => ({ rows: [] }));
+    val.proteina = Math.round(rows.reduce((s, c) => s + parseFloat(c.proteinas || 0), 0));
+  }
+  if (objetivos.some(o => o.clave === 'sueno')) {
+    const { rows } = await db('SELECT sueno FROM daily_logs WHERE fecha=$1', [fecha])
+      .catch(() => ({ rows: [] }));
+    val.sueno = rows.length && parseFloat(rows[0].sueno) > 0 ? 1 : 0;
+  }
+  if (objetivos.some(o => o.clave === 'hito')) {
+    const { rows } = await db(
+      'SELECT count(*) AS n FROM proyecto_tareas WHERE hecha AND completada_en = $1', [fecha]
+    ).catch(() => ({ rows: [{ n: 0 }] }));
+    val.hito = Number(rows[0].n);
+  }
+  if (objetivos.some(o => o.clave === 'ingles') && poolTutor) {
+    // `last_review` es la fecha del último repaso de cada palabra: contar las
+    // de hoy dice cuántas has trabajado, sin tocar nada en tutoringles.
+    const { rows } = await dbTutor(
+      'SELECT count(*) AS n FROM user_words WHERE last_review = $1', [fecha]
+    ).catch(() => ({ rows: [{ n: 0 }] }));
+    val.ingles = Number(rows[0].n);
+  }
+
+  return objetivos.map(o => {
+    const hecho = val[o.clave] ?? 0;
+    return { ...o, hecho, cumplido: hecho >= Number(o.meta || 1) };
+  });
+}
+
+// La misión del día: se crea la primera vez que se pide y sus objetivos
+// quedan fijados, para que no cambien a media tarde bajo tus pies.
+async function misionDelDia(fecha) {
+  let { rows } = await db('SELECT * FROM misiones WHERE fecha=$1', [fecha]);
+  if (!rows.length) {
+    const objetivos = await objetivosDelDia(fecha);
+    const { rows: nueva } = await db(
+      'INSERT INTO misiones (fecha) VALUES ($1) RETURNING *', [fecha]);
+    for (const o of objetivos) {
+      await db(
+        'INSERT INTO mision_objetivos (mision_id, clave, texto, meta, orden) VALUES ($1,$2,$3,$4,$5)',
+        [nueva[0].id, o.clave, o.texto, o.meta, o.orden]);
+    }
+    rows = nueva;
+  }
+  const mision = rows[0];
+
+  const { rows: objs } = await db(
+    'SELECT clave, texto, meta, orden FROM mision_objetivos WHERE mision_id=$1 ORDER BY orden',
+    [mision.id]);
+  const objetivos = await progresoObjetivos(fecha, objs);
+  const cumplidos = objetivos.filter(o => o.cumplido).length;
+
+  return {
+    fecha,
+    estado:    mision.estado,
+    resultado: mision.resultado,
+    objetivos,
+    cumplidos,
+    total:     objetivos.length,
+    completa:  objetivos.length > 0 && cumplidos === objetivos.length
+  };
+}
+
+app.get('/mision/:fecha?', async (req, res) => {
+  try {
+    res.json(await misionDelDia(req.params.fecha || hoyStr()));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Aceptar y rechazar dejan rastro: es la diferencia con los dos botones que
+// hacían lo mismo. Rechazar es una decisión válida —un día de descanso lo
+// es— y por eso se registra en vez de esconderse.
+app.post('/mision/:fecha/:accion', async (req, res) => {
+  const estado = { aceptar: 'aceptada', rechazar: 'rechazada' }[req.params.accion];
+  if (!estado) return res.status(400).json({ error: 'Acción no válida' });
+  try {
+    const fecha = req.params.fecha === 'hoy' ? hoyStr() : req.params.fecha;
+    await misionDelDia(fecha);   // se asegura de que existe
+    await db(
+      `UPDATE misiones SET estado=$1, aceptada_en=CASE WHEN $1='aceptada' THEN NOW() ELSE aceptada_en END
+        WHERE fecha=$2`, [estado, fecha]);
+    res.json(await misionDelDia(fecha));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1811,6 +1980,13 @@ app.get('/resumen/:fecha', async (req, res) => {
     const proyectos_sin_meta   = hojas.filter(p => p.sin_meta).length;
     const proyecto_prioritario = hojas[0]?.nombre || null;
 
+    // ── 6a. Misión del día ───────────────────────────────
+    // Solo para hoy: pedir el resumen de una fecha pasada no debe crear
+    // misiones retroactivas que nunca se ofrecieron.
+    const mision = fecha === hoyStr()
+      ? await misionDelDia(fecha).catch(e => { console.error('misión:', e.message); return null; })
+      : null;
+
     // ── 6b. Inglés ───────────────────────────────────────
     // OKIRO no enseña idiomas: mide y recuerda. La tarjeta de HOY dice si
     // quedan repasos y lleva a tutoringles, que es donde se estudia.
@@ -1851,7 +2027,8 @@ app.get('/resumen/:fecha', async (req, res) => {
       proyectos_activos,
       proyectos_sin_meta,
       proyecto_prioritario,
-      ingles
+      ingles,
+      mision
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
