@@ -575,14 +575,26 @@ async function updatePlayer() {
   const xpEl   = document.getElementById('xp-text');
   const chip   = document.getElementById('rank-chip');
 
+  /* Previsualización de diseño: okirosport.es/?aura=S pinta ese rango para ver
+     cómo queda el aura, sin tocar la base de datos ni inflar la racha. Solo
+     afecta a lo que se dibuja; al quitar el parámetro vuelve el rango real. */
+  const preview = new URLSearchParams(location.search).get('aura');
+  const rango   = (preview && 'EDCBAS'.includes(preview.toUpperCase()))
+    ? preview.toUpperCase()
+    : p.rango;
+
   if (lvlEl)  lvlEl.textContent  = 'LVL ' + p.nivel;
   if (fillEl) fillEl.style.width = Math.min(100, Math.round((p.xp_en_nivel / p.xp_para_subir) * 100)) + '%';
   if (xpEl)   xpEl.textContent   = p.xp_en_nivel + ' / ' + p.xp_para_subir + ' XP';
   if (chip) {
-    chip.textContent = p.rango;
-    chip.className   = 'rank-badge rank-' + p.rango.toLowerCase();
+    chip.textContent = rango;
+    chip.className   = 'rank-badge rank-' + rango.toLowerCase();
   }
-  setHdrAura(p.rango);
+  setHdrAura(rango);
+
+  // En previsualización no se guarda nada ni se lanzan avisos de cambio de
+  // rango: solo se está mirando cómo queda.
+  if (preview) { renderStreakInfo(); return; }
 
   /* Avisos de cambio: ahora el rango también puede BAJAR */
   const ORDER    = 'EDCBAS';
