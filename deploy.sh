@@ -30,7 +30,7 @@ cp -r "$SRC/assets" /opt/pwa/assets
 
 echo ">> Migraciones de base de datos (idempotentes)"
 if docker ps --format '{{.Names}}' | grep -q '^postgres$'; then
-  for M in migration.sql migration-v5.sql migration-v6.sql migration-v7.sql migration-v8.sql migration-v9.sql migration-v10.sql migration-v11.sql; do
+  for M in migration.sql migration-v5.sql migration-v6.sql migration-v7.sql migration-v8.sql migration-v9.sql migration-v10.sql migration-v11.sql migration-v12.sql; do
     docker exec -i postgres psql -U postgres -d starkos < "$SRC/$M" >/dev/null 2>&1 \
       && echo "   $M aplicada" \
       || echo "   !! $M fallo (no bloqueante) - revisa a mano"
@@ -67,6 +67,10 @@ fi
 # /mision: la mision diaria, con sus objetivos de todos los ambitos
 if ! grep -q 'mision)' "$NGINX_SITE"; then
   sed -i 's#|tareas)#|tareas|mision)#' "$NGINX_SITE"
+fi
+# /progreso: XP, nivel, rango y racha, que antes vivian en localStorage
+if ! grep -q 'progreso)' "$NGINX_SITE"; then
+  sed -i 's#|mision)#|mision|progreso)#' "$NGINX_SITE"
 fi
 nginx -t && systemctl reload nginx
 

@@ -249,13 +249,18 @@ app.post('/push/tick', async (req, res) => {
     try {
       const m = await misionDelDia(hoy);
       if (tipo === 'cierre') {
+        // Rechazarla cuenta como fallarla: decidir que no, no evita el coste.
+        const cumplida = m.completa && m.estado !== 'rechazada';
         await db(
-          `UPDATE misiones SET resultado=$1, cerrada_en=NOW() WHERE fecha=$2 AND resultado IS NULL`,
-          [m.completa ? 'cumplida' : 'fallada', hoy]);
-        titulo = m.completa ? 'MISIÓN CUMPLIDA' : 'MISIÓN FALLADA';
-        cuerpo = m.completa
-          ? `${m.total} de ${m.total} objetivos. El aura sube.`
-          : `${m.cumplidos} de ${m.total} objetivos. Mañana se recupera.`;
+          `UPDATE misiones SET resultado=$1, xp_bonus=$2, cerrada_en=NOW()
+            WHERE fecha=$3 AND resultado IS NULL`,
+          [cumplida ? 'cumplida' : 'fallada',
+           cumplida ? XP_MISION_CUMPLIDA : XP_MISION_FALLADA, hoy]);
+        const p = await calcularProgreso();
+        titulo = cumplida ? 'MISIÓN CUMPLIDA' : 'MISIÓN FALLADA';
+        cuerpo = cumplida
+          ? `${m.total} de ${m.total} · +${XP_MISION_CUMPLIDA} XP · rango ${p.rango}`
+          : `${m.cumplidos} de ${m.total} · ${XP_MISION_FALLADA} XP · mañana, recuperación`;
       } else if (m.total) {
         const pend = m.objetivos.filter(o => !o.cumplido);
         cuerpo = pend.length
@@ -282,7 +287,7 @@ app.post('/push/tick', async (req, res) => {
 
 // Objetivos del día a partir de lo que hay. Solo entra lo que tiene sentido
 // hoy: sin rutina no se pide entreno, sin repasos no se pide inglés.
-async function objetivosDelDia(fecha) {
+async function objetivosDelDia(fecha, recuperacion = false) {
   const objetivos = [];
 
   // 1. Entreno — solo si hoy toca rutina
@@ -309,17 +314,32 @@ async function objetivosDelDia(fecha) {
     .filter(p => !p.es_padre && p.progreso_real < 100 && p.tareas_total > p.tareas_hechas)
     .sort((a, b) => a.progreso_real - b.progreso_real);
   if (hojas.length) {
-    objetivos.push({ clave: 'hito', texto: `Cerrar un hito de ${hojas[0].nombre}`, meta: 1 });
+    // En recuperación se pide el doble: la penalización es más esfuerzo, no
+    // menos, como la zona de penalización del anime.
+    const n = recuperacion ? 2 : 1;
+    objetivos.push({
+      clave: 'hito',
+      texto: n === 1 ? `Cerrar un hito de ${hojas[0].nombre}` : `Cerrar ${n} hitos`,
+      meta:  n
+    });
   }
 
   // 5. Idioma — solo si de verdad hay repasos esperando
   const ing = await valoresIngles();
   if (ing.ingles_repasos_hoy > 0) {
-    const cuantas = Math.min(20, ing.ingles_repasos_hoy);
+    const base = Math.min(20, ing.ingles_repasos_hoy);
+    const cuantas = recuperacion ? Math.min(ing.ingles_repasos_hoy, base * 2) : base;
     objetivos.push({ clave: 'ingles', texto: `Repasar ${cuantas} palabras de inglés`, meta: cuantas });
   }
 
   return objetivos.map((o, i) => ({ ...o, orden: i }));
+}
+
+// Fecha del día anterior en formato ISO, sin arrastrar la zona horaria.
+function ayerDe(fecha) {
+  const d = new Date(fecha + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
 }
 
 // Cuánto llevas de cada objetivo, leído de los datos de verdad.
@@ -367,9 +387,14 @@ async function progresoObjetivos(fecha, objetivos) {
 async function misionDelDia(fecha) {
   let { rows } = await db('SELECT * FROM misiones WHERE fecha=$1', [fecha]);
   if (!rows.length) {
-    const objetivos = await objetivosDelDia(fecha);
+    // Si ayer se falló, hoy toca misión de recuperación: más exigente.
+    const { rows: [previa] } = await db(
+      'SELECT resultado FROM misiones WHERE fecha=$1', [ayerDe(fecha)]);
+    const recuperacion = previa?.resultado === 'fallada';
+
+    const objetivos = await objetivosDelDia(fecha, recuperacion);
     const { rows: nueva } = await db(
-      'INSERT INTO misiones (fecha) VALUES ($1) RETURNING *', [fecha]);
+      'INSERT INTO misiones (fecha, recuperacion) VALUES ($1,$2) RETURNING *', [fecha, recuperacion]);
     for (const o of objetivos) {
       await db(
         'INSERT INTO mision_objetivos (mision_id, clave, texto, meta, orden) VALUES ($1,$2,$3,$4,$5)',
@@ -387,14 +412,129 @@ async function misionDelDia(fecha) {
 
   return {
     fecha,
-    estado:    mision.estado,
-    resultado: mision.resultado,
+    estado:       mision.estado,
+    resultado:    mision.resultado,
+    recuperacion: mision.recuperacion,
+    xp_bonus:     mision.xp_bonus,
     objetivos,
     cumplidos,
     total:     objetivos.length,
     completa:  objetivos.length > 0 && cumplidos === objetivos.length
   };
 }
+
+// ── PROGRESO: XP, nivel, rango y racha ───────────────────
+// Vivían en localStorage, así que se perdían al cambiar de móvil y el cron no
+// podía penalizar nada. Ahora los calcula el backend desde los datos.
+const XP_MISION_CUMPLIDA = 50;
+const XP_MISION_FALLADA  = -25;
+
+// Mismos puntos que enseñaba la app, ahora como única fuente de verdad.
+function xpDelDia(l) {
+  let xp = 0;
+  if (l.entreno_completado) xp += 40;
+  const s = parseFloat(l.sueno) || 0;
+  if (s >= 7) xp += 15; else if (s > 0) xp += 5;
+  xp += (parseInt(l.energia)   || 0);
+  xp += (parseInt(l.nutricion) || 0);
+  xp += (parseInt(l.tareas_completadas) || 0) * 8;
+  if (l.notas && String(l.notas).trim()) xp += 5;
+  return xp;
+}
+
+function nivelDesdeXP(xp) {
+  let nivel = 1, resto = Math.max(0, xp), necesita = 80;
+  while (resto >= necesita) { resto -= necesita; nivel++; necesita = 80 + (nivel - 1) * 40; }
+  return { nivel, resto, necesita };
+}
+
+// El rango sale de la racha, no del nivel: es lo que ya hacía la app y lo que
+// hace que romper la constancia se note de verdad.
+function rangoDesdeRacha(n) {
+  if (n >= 60) return 'S';
+  if (n >= 30) return 'A';
+  if (n >= 14) return 'B';
+  if (n >= 7)  return 'C';
+  if (n >= 3)  return 'D';
+  return 'E';
+}
+
+// Cierra las misiones de días pasados que quedaron sin resultado. No depende
+// del push: si el móvil estaba apagado o el cron falló, se sella igual la
+// próxima vez que se mire el progreso.
+async function cerrarMisionesPendientes() {
+  const { rows } = await db(
+    `SELECT fecha FROM misiones
+      WHERE resultado IS NULL AND fecha < $1 ORDER BY fecha`, [hoyStr()]);
+  for (const r of rows) {
+    const fecha = new Date(r.fecha).toISOString().slice(0, 10);
+    try {
+      const m = await misionDelDia(fecha);
+      // Rechazarla cuenta como fallarla: la decisión no evita la consecuencia.
+      const cumplida = m.completa && m.estado !== 'rechazada';
+      await db(
+        `UPDATE misiones SET resultado=$1, xp_bonus=$2, cerrada_en=NOW()
+          WHERE fecha=$3 AND resultado IS NULL`,
+        [cumplida ? 'cumplida' : 'fallada',
+         cumplida ? XP_MISION_CUMPLIDA : XP_MISION_FALLADA, fecha]);
+    } catch (e) { console.error('cierre de misión', fecha, e.message); }
+  }
+}
+
+// Días consecutivos con registro, contando desde hoy o desde ayer (a media
+// mañana todavía no hay registro de hoy y la racha no debe romperse por eso).
+function rachaDeRegistros(fechas) {
+  const dias = new Set(fechas.map(f => new Date(f).toISOString().slice(0, 10)));
+  const d = new Date(hoyStr() + 'T12:00:00Z');
+  const iso = () => d.toISOString().slice(0, 10);
+  if (!dias.has(iso())) d.setUTCDate(d.getUTCDate() - 1);
+  let racha = 0;
+  while (dias.has(iso())) { racha++; d.setUTCDate(d.getUTCDate() - 1); }
+  return racha;
+}
+
+async function calcularProgreso() {
+  await cerrarMisionesPendientes();
+
+  const { rows: logs } = await db(
+    'SELECT fecha, sueno, energia, nutricion, entreno_completado, tareas_completadas, notas FROM daily_logs'
+  ).catch(() => ({ rows: [] }));
+
+  const xpLogs = logs.reduce((a, l) => a + xpDelDia(l), 0);
+  const { rows: [mis] } = await db(
+    'SELECT COALESCE(SUM(xp_bonus), 0) AS xp, count(*) FILTER (WHERE resultado = $1) AS falladas FROM misiones',
+    ['fallada']).catch(() => ({ rows: [{ xp: 0, falladas: 0 }] }));
+
+  // El XP puede bajar: si no, fallar la misión no costaría nada.
+  const xp    = Math.max(0, xpLogs + Number(mis.xp));
+  const racha = rachaDeRegistros(logs.map(l => l.fecha));
+  const rango = rangoDesdeRacha(racha);
+  const { nivel, resto, necesita } = nivelDesdeXP(xp);
+
+  const { rows: [prev] } = await db('SELECT * FROM progreso WHERE usuario_id=1');
+  const mejor = Math.max(racha, prev?.mejor_racha || 0);
+
+  await db(
+    `UPDATE progreso SET xp=$1, nivel=$2, rango=$3, racha=$4, mejor_racha=$5,
+            penalizaciones=$6, actualizado=NOW() WHERE usuario_id=1`,
+    [xp, nivel, rango, racha, mejor, Number(mis.falladas)]);
+
+  return {
+    xp, nivel, rango, racha,
+    mejor_racha: mejor,
+    xp_en_nivel: resto,
+    xp_para_subir: necesita,
+    penalizaciones: Number(mis.falladas),
+    // Lo devuelve para que la app sepa si hoy arrastra castigo.
+    rango_anterior: prev?.rango || 'E'
+  };
+}
+
+app.get('/progreso', async (req, res) => {
+  try {
+    res.json(await calcularProgreso());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.get('/mision/:fecha?', async (req, res) => {
   try {

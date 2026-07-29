@@ -475,7 +475,7 @@ async function loadL() {
     const logs = await res.json();
 
     updateStreakBar(logs);
-    updatePlayer(logs);
+    updatePlayer();
 
     if (!Array.isArray(logs) || !logs.length) {
       hl.innerHTML = '<div class="empty-state">Sin registros todavía.</div>';
@@ -557,48 +557,50 @@ function setHdrAura(label) {
   if (faint) faint.setAttribute('cy', cy);
 }
 
-function updatePlayer(logs) {
-  const windowed = Array.isArray(logs) ? logs.reduce((a, l) => a + dayXP(l), 0) : 0;
-  const prev     = parseInt(localStorage.getItem('okiro_xp') || '0', 10) || 0;
-  const totalXP  = Math.max(prev, windowed);
-  localStorage.setItem('okiro_xp', String(totalXP));
-
-  let lvl = 1, rem = totalXP, need = 80;
-  while (rem >= need) { rem -= need; lvl++; need = 80 + (lvl - 1) * 40; }
+/* El progreso ya no se calcula aquí: lo manda el servidor. Antes vivía en
+   localStorage, así que se perdía al cambiar de móvil y una penalización se
+   esquivaba vaciando la caché. localStorage se queda solo como espejo de lo
+   último pintado, para no parpadear ni perder el aviso de cambio de rango. */
+async function updatePlayer() {
+  let p = null;
+  try {
+    const res = await api('/progreso');
+    p = res.ok ? await res.json() : null;
+  } catch { /* sin conexión: se mantiene lo último pintado */ }
+  if (!p) { renderStreakInfo(); return; }
 
   const lvlEl  = document.getElementById('lvl-label');
   const fillEl = document.getElementById('xp-fill');
   const xpEl   = document.getElementById('xp-text');
   const chip   = document.getElementById('rank-chip');
-  const prevLvl = parseInt(localStorage.getItem('okiro_lvl') || '0', 10) || 0;
 
-  if (lvlEl)  lvlEl.textContent  = 'LVL ' + lvl;
-  if (fillEl) fillEl.style.width = Math.min(100, Math.round((rem / need) * 100)) + '%';
-  if (xpEl)   xpEl.textContent   = rem + ' / ' + need + ' XP';
-
-  /* Rango por racha, no por nivel (kit de marca) */
-  const streak = currentStreak(logs);
-  const [label, cls] = rankForStreak(streak);
+  if (lvlEl)  lvlEl.textContent  = 'LVL ' + p.nivel;
+  if (fillEl) fillEl.style.width = Math.min(100, Math.round((p.xp_en_nivel / p.xp_para_subir) * 100)) + '%';
+  if (xpEl)   xpEl.textContent   = p.xp_en_nivel + ' / ' + p.xp_para_subir + ' XP';
   if (chip) {
-    chip.textContent = label;
-    chip.className   = 'rank-badge ' + cls;
+    chip.textContent = p.rango;
+    chip.className   = 'rank-badge rank-' + p.rango.toLowerCase();
   }
-  setHdrAura(label);
+  setHdrAura(p.rango);
 
+  /* Avisos de cambio: ahora el rango también puede BAJAR */
+  const ORDER    = 'EDCBAS';
   const prevRank = localStorage.getItem('okiro_rank') || '';
-  const ORDER = 'EDCBAS';
-  if (prevRank && ORDER.indexOf(label) > ORDER.indexOf(prevRank) && typeof toast === 'function') {
-    toast(`RANGO ${label}. El aura sube.`, 'ok');
+  const prevLvl  = parseInt(localStorage.getItem('okiro_lvl') || '0', 10) || 0;
+  if (prevRank && typeof toast === 'function') {
+    if (ORDER.indexOf(p.rango) > ORDER.indexOf(prevRank)) {
+      toast(`RANGO ${p.rango}. El aura sube.`, 'ok');
+    } else if (ORDER.indexOf(p.rango) < ORDER.indexOf(prevRank)) {
+      toast(`RANGO ${p.rango}. El aura baja.`, 'error');
+    }
   }
-  localStorage.setItem('okiro_rank', label);
-  localStorage.setItem('okiro_streak', String(streak));
+  if (prevLvl && p.nivel > prevLvl && typeof toast === 'function') toast(`NIVEL ${p.nivel}.`, 'ok');
 
-  if (prevLvl && lvl > prevLvl && typeof toast === 'function') {
-    toast(`NIVEL ${lvl}.`, 'ok');
-  }
-  localStorage.setItem('okiro_lvl', String(lvl));
+  localStorage.setItem('okiro_rank',   p.rango);
+  localStorage.setItem('okiro_streak', String(p.racha));
+  localStorage.setItem('okiro_lvl',    String(p.nivel));
+  localStorage.setItem('okiro_xp',     String(p.xp));
 
-  /* Actualiza la línea HOY después de que el player esté computado */
   renderStreakInfo();
 }
 
@@ -675,7 +677,8 @@ async function showMissionModal() {
   if (!m && localStorage.getItem('missionShown') === todayStr) return;
 
   overlay.style.display = 'flex';
-  if (typerEl) typewriterEffect(typerEl, 'MISIÓN DIARIA', 35);
+  // Si ayer se falló, hoy la misión viene con castigo: más exigente y avisando.
+  if (typerEl) typewriterEffect(typerEl, m?.recuperacion ? 'MISIÓN DE RECUPERACIÓN' : 'MISIÓN DIARIA', 35);
 
   if (!m || !m.total) {
     if (bodyEl) bodyEl.innerHTML = '<p class="mm-no-data">Sin objetivos para hoy</p>';
@@ -687,7 +690,9 @@ async function showMissionModal() {
           <span class="mm-obj-txt">${o.texto}</span>
         </li>`).join('')}
       </ul>
-      <p class="mm-nota">Se cumplen solos: entrena, come, registra, cierra un hito o repasa.</p>`;
+      ${m.recuperacion ? '<p class="mm-nota mm-castigo">Ayer falló. Hoy se pide el doble.</p>' : ''}
+      <p class="mm-nota">Se cumplen solos: entrena, come, registra, cierra un hito o repasa.
+        Cumplirla suma 50 XP; fallarla resta 25.</p>`;
   }
 
   localStorage.setItem('missionShown', todayStr);
@@ -723,7 +728,7 @@ async function initData() {
     const res  = await api('/logs');
     const logs = res.ok ? await res.json() : [];
     updateStreakBar(logs);
-    updatePlayer(logs);
+    updatePlayer();
   } catch {}
 
   /* Dashboard de HOY */
