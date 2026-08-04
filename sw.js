@@ -1,9 +1,14 @@
-// OkiroSport â€” Service Worker
+// OKIRO — Service Worker
 // Estrategia:
-//  Â· EstÃ¡ticos (css/js/iconos/fuentes): cache-first con actualizaciÃ³n en segundo plano
-//  Â· NavegaciÃ³n (index.html): network-first con fallback a cachÃ© (offline)
-//  Â· API (/logs, /rutinas, ...): siempre red â€” nunca cachear datos
-const VERSION = 'okiro-v7.0.0';
+//  · Estáticos (css/js/iconos/fuentes): cache-first con actualización en segundo plano
+//  · Navegación (index.html): network-first con fallback a caché (offline)
+//  · API (/logs, /rutinas, ...): siempre red — nunca cachear datos
+//
+// Este archivo estuvo guardado con la codificación rota (las tildes salían
+// como dos símbolos), y no era solo cosa de los comentarios: el texto de aviso
+// de más abajo es el que sale en la notificación si el push llega sin
+// contenido. Lo vigila tools/test-codificacion.js.
+const VERSION = 'okiro-v7.2.0';
 const STATIC_CACHE = `${VERSION}-static`;
 
 const PRECACHE = [
@@ -19,27 +24,27 @@ const PRECACHE = [
   '/src/js/gym.js',
   '/src/js/nutrition.js',
   '/src/js/ia.js',
-  '/mock.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/assets/ejercicios.json'    // catálogo de técnica: se quiere disponible en el gimnasio
 ];
 
-// Rutas de API â€” nunca pasan por cachÃ©
+// Rutas de API — nunca pasan por caché
 const API_PREFIXES = ['/logs', '/proyectos', '/rutinas', '/ejercicios', '/sesiones',
                       '/nutricion', '/strava', '/notion', '/ia', '/auth', '/health',
-                      '/resumen', '/push', '/cruce', '/party', '/tareas', '/medidas', '/mision', '/progreso'];   // /resumen faltaba: se cacheaba el dashboard de HOY como si fuera estatico
+                      '/resumen', '/push', '/cruce', '/party', '/tareas', '/medidas', '/mision', '/progreso'];   // /resumen faltaba: se cacheaba el dashboard de HOY como si fuera estático
 
-// ...salvo las animaciones de tecnica, que cuelgan de /ejercicios pero son
-// imagenes fijas. Su nombre lleva dentro el id del media, asi que un archivo
-// nunca cambia de contenido: cachearlas es lo que hace que la tecnica se vea
-// al instante en el gimnasio, donde la cobertura es mala.
-const MEDIA_PREFIX = '/ejercicios/media/';
+// ...salvo la técnica, que cuelga de /ejercicios pero son archivos fijos: las
+// animaciones (media) y los vídeos de persona real (video). Ninguno cambia de
+// contenido nunca, así que se quedan guardados. Es lo que hace que la técnica
+// se vea al instante en el gimnasio, donde la cobertura es mala — y que un
+// clip de 330 KB se descargue una sola vez en la vida.
+const MEDIA_PREFIXES = ['/ejercicios/media/', '/ejercicios/video/'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then(cache =>
-      /* {cache:'reload'} fuerza descarga fresca, ignorando la cachÃ© HTTP */
+      /* {cache:'reload'} fuerza descarga fresca, ignorando la caché HTTP */
       Promise.all(PRECACHE.map(url =>
         fetch(new Request(url, { cache: 'reload' }))
           .then(res => res.ok ? cache.put(url, res) : null)
@@ -59,11 +64,11 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// â”€â”€ MISIÃ“N DIARIA (push) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// El sistema avisa, no anima: tÃ­tulo y cuerpo llegan ya redactados del backend.
+// ── MISIÓN DIARIA (push) ─────────────────────────────────────────────────
+// El sistema avisa, no anima: título y cuerpo llegan ya redactados del backend.
 self.addEventListener('push', (event) => {
-  let d = { titulo: 'OKIRO', cuerpo: 'MisiÃ³n diaria disponible.' };
-  try { d = { ...d, ...event.data.json() }; } catch { /* payload vacÃ­o: valores por defecto */ }
+  let d = { titulo: 'OKIRO', cuerpo: 'Misión diaria disponible.' };
+  try { d = { ...d, ...event.data.json() }; } catch { /* payload vacío: valores por defecto */ }
   event.waitUntil(
     self.registration.showNotification(d.titulo, {
       body: d.cuerpo,
@@ -95,8 +100,8 @@ self.addEventListener('fetch', (event) => {
   // Solo GET; el resto (POST/PUT/DELETE) va directo a red
   if (event.request.method !== 'GET') return;
 
-  // Medias de tecnica â†’ cache-first de verdad: si ya esta, ni se pregunta
-  if (url.origin === location.origin && url.pathname.startsWith(MEDIA_PREFIX)) {
+  // Medias de técnica → cache-first de verdad: si ya está, ni se pregunta
+  if (url.origin === location.origin && MEDIA_PREFIXES.some(p => url.pathname.startsWith(p))) {
     event.respondWith(
       caches.match(event.request).then(cached => cached || fetch(event.request).then(res => {
         if (res.ok) {
@@ -109,13 +114,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API â†’ siempre red (los datos nunca se sirven de cachÃ©)
+  // API → siempre red (los datos nunca se sirven de caché)
   if (url.origin === location.origin &&
       API_PREFIXES.some(p => url.pathname === p || url.pathname.startsWith(p + '/'))) {
     return;
   }
 
-  // NavegaciÃ³n â†’ network-first, fallback al index cacheado (modo offline)
+  // Navegación → network-first, fallback al index cacheado (modo offline)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -129,7 +134,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // EstÃ¡ticos (mismo origen + Google Fonts) â†’ cache-first con revalidaciÃ³n
+  // Estáticos (mismo origen + Google Fonts) → cache-first con revalidación
   event.respondWith(
     caches.match(event.request).then(cached => {
       const fetched = fetch(event.request)

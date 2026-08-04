@@ -1,4 +1,4 @@
-// OKIRO Backend v4 — producción
+// OKIRO Backend v7.2.0 — producción
 // Requiere Node 18+ (usa fetch global)
 const express = require('express');
 const fs   = require('fs');
@@ -43,7 +43,29 @@ const APP_TZ         = process.env.APP_TZ || 'Europe/Madrid';       // zona hora
 const hoyStr = () => new Intl.DateTimeFormat('en-CA', { timeZone: APP_TZ }).format(new Date());
 
 // ── Estáticos (la PWA) — siempre públicos ────────────────
+// OJO CON LO QUE HAY EN ESTA CARPETA. express.static sirve el directorio
+// entero y va ANTES del control de acceso, así que todo lo que cuelgue de
+// aquí es público. Servía .secrets/app_token —la clave de toda la API— en
+// texto plano y sin pedir nada, además del propio server.js y las migraciones.
+// En producción no llegaba a pasar porque nginx manda "/" al contenedor de la
+// PWA, pero bastaba con desplegar el nginx.conf del repo para abrirlo.
+//
+// Dos cierres, porque uno solo se olvida:
+//   · dotfiles 'deny' → .secrets, .cache, .git y cualquier otro punto
+//   · lista de lo que es del servidor y nunca de la PWA
+const PRIVADOS = /^\/(server\.js|package(-lock)?\.json|deploy\.sh|nginx\.conf|iniciar-local\.cmd|migration[^/]*\.sql|CLAUDE\.md|PRODUCTO\.md|tools\/|\.)/;
+app.use((req, res, next) => {
+  // Hay que normalizar ANTES de mirar: express.static resuelve los ".." por su
+  // cuenta, así que /ejercicios/media/../../server.js llegaba aquí disfrazado
+  // y salía servido igual.
+  let ruta;
+  try { ruta = path.posix.normalize(decodeURIComponent(req.path)); }
+  catch { return res.status(400).json({ error: 'Ruta no válida' }); }
+  if (PRIVADOS.test(ruta)) return res.status(404).json({ error: 'No encontrado' });
+  next();
+});
 app.use(express.static(__dirname, {
+  dotfiles: 'deny',
   setHeaders(res, filePath) {
     // El service worker y el index no deben quedar cacheados por el navegador
     if (filePath.endsWith('sw.js') || filePath.endsWith('index.html')) {
@@ -96,13 +118,34 @@ pool.on('error', (e) => console.error('DB error', e.message));
 const db = (q, p) => pool.query(q, p);
 
 // ── LÍMITE DIARIO DE IA (protege tu factura) ─────────────
-let aiUsage = { day: '', count: 0 };
-function aiQuotaOk() {
-  const today = hoyStr();
-  if (aiUsage.day !== today) aiUsage = { day: today, count: 0 };
-  if (aiUsage.count >= AI_DAILY_LIMIT) return false;
-  aiUsage.count++;
-  return true;
+// El contador vive en la base de datos, no en memoria: en memoria se ponía a
+// cero en cada `docker restart`, así que el tope de 40 llamadas al día no era
+// tal — bastaba con reiniciar el backend para volver a empezar. Como esto es
+// lo único que separa la clave de Anthropic de una factura sorpresa, tiene que
+// sobrevivir a un reinicio.
+let aiUsage = { day: '', count: 0 };   // respaldo si la base no responde
+
+async function aiQuotaOk() {
+  const hoy = hoyStr();
+  try {
+    const { rows } = await db("SELECT valor FROM config WHERE clave = 'ia_uso'");
+    const [dia, n] = String(rows[0]?.valor || '').split('|');
+    const usadas = dia === hoy ? (parseInt(n, 10) || 0) : 0;
+    if (usadas >= AI_DAILY_LIMIT) return false;
+    await db(
+      `INSERT INTO config (clave, valor) VALUES ('ia_uso', $1)
+       ON CONFLICT (clave) DO UPDATE SET valor = $1`,
+      [`${hoy}|${usadas + 1}`]
+    );
+    return true;
+  } catch {
+    // Sin base de datos se cae al contador en memoria: peor que el de la base,
+    // pero nunca peor de lo que había antes.
+    if (aiUsage.day !== hoy) aiUsage = { day: hoy, count: 0 };
+    if (aiUsage.count >= AI_DAILY_LIMIT) return false;
+    aiUsage.count++;
+    return true;
+  }
 }
 
 // ── Llamada a Claude (key del servidor, nunca del cliente) ─
@@ -112,7 +155,7 @@ async function claude(content, maxTokens = 1024) {
     err.status = 503;
     throw err;
   }
-  if (!aiQuotaOk()) {
+  if (!await aiQuotaOk()) {
     const err = new Error(`Límite diario de IA alcanzado (${AI_DAILY_LIMIT}/día)`);
     err.status = 429;
     throw err;
@@ -295,17 +338,26 @@ app.post('/push/tick', async (req, res) => {
 
 // Objetivos del día a partir de lo que hay. Solo entra lo que tiene sentido
 // hoy: sin rutina no se pide entreno, sin repasos no se pide inglés.
+// Qué rutina toca en una fecha. Estaba copiado en /resumen y en la misión, con
+// el riesgo de que un día se arreglara en un sitio y no en el otro.
+// Mediodía UTC a propósito: con medianoche, el desfase horario mueve el getDay
+// al día anterior y el lunes pasa a contarse como domingo.
+const DIAS_SEMANA = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+
+function rutinaDeLaFecha(rutinas, fecha) {
+  const diaLabel = DIAS_SEMANA[new Date(fecha + 'T12:00:00Z').getUTCDay()];
+  return rutinas.find(r => {
+    const dias = Array.isArray(r.dias) ? r.dias : (typeof r.dias === 'string' ? JSON.parse(r.dias) : []);
+    return dias.map(d => String(d).toLowerCase()).includes(diaLabel);
+  });
+}
+
 async function objetivosDelDia(fecha, recuperacion = false) {
   const objetivos = [];
 
   // 1. Entreno — solo si hoy toca rutina
-  const dDate = new Date(fecha + 'T12:00:00Z');
-  const diaLabel = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][dDate.getUTCDay()];
   const { rows: rutinas } = await db('SELECT nombre, dias FROM rutinas').catch(() => ({ rows: [] }));
-  const rutinaHoy = rutinas.find(r => {
-    const dias = Array.isArray(r.dias) ? r.dias : (typeof r.dias === 'string' ? JSON.parse(r.dias) : []);
-    return dias.map(d => String(d).toLowerCase()).includes(diaLabel);
-  });
+  const rutinaHoy = rutinaDeLaFecha(rutinas, fecha);
   if (rutinaHoy) {
     objetivos.push({ clave: 'entreno', texto: `Completar la rutina ${rutinaHoy.nombre}`, meta: 1 });
   }
@@ -403,14 +455,32 @@ async function misionDelDia(fecha) {
     const recuperacion = previa?.resultado === 'fallada';
 
     const objetivos = await objetivosDelDia(fecha, recuperacion);
-    const { rows: nueva } = await db(
-      'INSERT INTO misiones (fecha, recuperacion) VALUES ($1,$2) RETURNING *', [fecha, recuperacion]);
-    for (const o of objetivos) {
-      await db(
-        'INSERT INTO mision_objetivos (mision_id, clave, texto, meta, orden) VALUES ($1,$2,$3,$4,$5)',
-        [nueva[0].id, o.clave, o.texto, o.meta, o.orden]);
-    }
-    rows = nueva;
+
+    // En una sola transacción: la misión y sus objetivos entran juntos o no
+    // entra ninguno. Sueltos, un fallo a media inserción dejaba una misión sin
+    // objetivos — y una misión sin objetivos nunca puede estar completa, así
+    // que el cierre nocturno la marcaba fallada y te quitaba 25 XP por un día
+    // en el que no habías hecho nada mal.
+    const cliente = await pool.connect();
+    try {
+      await cliente.query('BEGIN');
+      const { rows: nueva } = await cliente.query(
+        'INSERT INTO misiones (fecha, recuperacion) VALUES ($1,$2) RETURNING *', [fecha, recuperacion]);
+      for (const o of objetivos) {
+        await cliente.query(
+          'INSERT INTO mision_objetivos (mision_id, clave, texto, meta, orden) VALUES ($1,$2,$3,$4,$5)',
+          [nueva[0].id, o.clave, o.texto, o.meta, o.orden]);
+      }
+      await cliente.query('COMMIT');
+      rows = nueva;
+    } catch (e) {
+      await cliente.query('ROLLBACK').catch(() => {});
+      // 23505 = choque con UNIQUE(fecha, usuario_id): dos pantallas pidieron la
+      // misión del día a la vez y ganó la otra. No es un error: se usa la suya.
+      if (e.code !== '23505') throw e;
+      ({ rows } = await db('SELECT * FROM misiones WHERE fecha=$1', [fecha]));
+      if (!rows.length) throw e;
+    } finally { cliente.release(); }
   }
   const mision = rows[0];
 
@@ -549,10 +619,29 @@ async function calcularProgreso() {
   const { rows: [prev] } = await db('SELECT * FROM progreso WHERE usuario_id=1');
   const mejor = Math.max(racha, prev?.mejor_racha || 0);
 
-  await db(
-    `UPDATE progreso SET xp=$1, nivel=$2, rango=$3, racha=$4, mejor_racha=$5,
-            penalizaciones=$6, actualizado=NOW() WHERE usuario_id=1`,
-    [xp, nivel, rango, racha, mejor, Number(mis.falladas)]);
+  // Solo se escribe si algo cambió de verdad. Esto es un GET y lo llama la app
+  // en cada refresco de pantalla: escribir siempre significaba un UPDATE por
+  // cada vez que mirabas el progreso, aunque no hubiera cambiado ni un punto.
+  const cambio = !prev
+    || Number(prev.xp)    !== xp
+    || Number(prev.nivel) !== nivel
+    || prev.rango         !== rango
+    || Number(prev.racha) !== racha
+    || Number(prev.mejor_racha)    !== mejor
+    || Number(prev.penalizaciones) !== Number(mis.falladas);
+
+  if (cambio) {
+    // INSERT ... ON CONFLICT y no UPDATE a secas: si la fila del usuario 1 no
+    // existiera (base recién creada sin la semilla), el UPDATE no daba error,
+    // simplemente no guardaba nada y el progreso se perdía en silencio.
+    await db(
+      `INSERT INTO progreso (usuario_id, xp, nivel, rango, racha, mejor_racha, penalizaciones, actualizado)
+       VALUES (1,$1,$2,$3,$4,$5,$6,NOW())
+       ON CONFLICT (usuario_id) DO UPDATE SET
+         xp=$1, nivel=$2, rango=$3, racha=$4, mejor_racha=$5,
+         penalizaciones=$6, actualizado=NOW()`,
+      [xp, nivel, rango, racha, mejor, Number(mis.falladas)]);
+  }
 
   const hoyLog = logs.find(l => String(l.fecha).slice(0, 10) === hoyStr());
 
@@ -765,21 +854,11 @@ const poolTutor = TUTOR_URL ? new Pool({ connectionString: TUTOR_URL }) : null;
 if (poolTutor) poolTutor.on('error', e => console.error('DB tutoringles:', e.message));
 const dbTutor = (q, p) => poolTutor.query(q, p);
 
-// Días consecutivos hasta hoy (o hasta ayer: a media mañana todavía no hay
-// registro y la racha no debe romperse por eso).
-function rachaDeDias(fechas) {
-  if (!fechas.length) return 0;
-  const dia = f => Math.floor(new Date(f).getTime() / 86400000);
-  const hoy = Math.floor(Date.now() / 86400000);
-  let esperado = dia(fechas[0]);
-  if (hoy - esperado > 1) return 0;
-  let racha = 0;
-  for (const f of fechas) {
-    if (dia(f) !== esperado) break;
-    racha++; esperado--;
-  }
-  return racha;
-}
+// La racha de días seguidos la calcula rachaDeRegistros(), definida arriba.
+// Aquí había una segunda versión con otro algoritmo (y contaba los días con
+// Date.now(), o sea en UTC, no en tu zona horaria) y en valoresAutomaticos()
+// una tercera copiada a mano. Tres formas de contar lo mismo que podían dar
+// números distintos el mismo día: ahora es una.
 
 async function valoresIngles() {
   const v = {};
@@ -789,8 +868,8 @@ async function valoresIngles() {
       dbTutor(`SELECT count(*) FILTER (WHERE status = 'mastered')  AS dominadas,
                       count(*) FILTER (WHERE status <> 'new')      AS empezadas,
                       count(*)                                     AS total,
-                      count(*) FILTER (WHERE next_review_date <= CURRENT_DATE) AS repasos
-                 FROM user_words`),
+                      count(*) FILTER (WHERE next_review_date <= $1::date) AS repasos
+                 FROM user_words`, [hoyStr()]),
       dbTutor('SELECT count(*) AS n FROM situation_progress WHERE completed'),
       dbTutor('SELECT DISTINCT date FROM study_sessions ORDER BY date DESC LIMIT 400')
     ]);
@@ -800,7 +879,7 @@ async function valoresIngles() {
     v.ingles_total       = Number(w.total);
     v.ingles_repasos_hoy = Number(w.repasos);
     v.ingles_situaciones = Number(sit.rows[0].n);
-    v.ingles_racha       = rachaDeDias(ses.rows.map(r => r.date));
+    v.ingles_racha       = rachaDeRegistros(ses.rows.map(r => r.date));
   } catch (e) {
     // Si tutoringles está caído, sus proyectos se quedan con el último valor
     // guardado en vez de tumbar la pantalla de proyectos entera.
@@ -816,32 +895,23 @@ async function valoresAutomaticos() {
   try {
     // Racha: días consecutivos con registro, contando desde hoy o desde ayer
     // (a media mañana aún no hay registro de hoy y la racha no debe romperse).
+    // La cuenta la hace rachaDeRegistros, la misma que usa el rango: aquí
+    // había una copia con otro algoritmo, y el proyecto "días seguidos"
+    // enseñaba un número mientras la cabecera enseñaba otro.
     const { rows: dias } = await db(
       'SELECT DISTINCT fecha FROM daily_logs ORDER BY fecha DESC LIMIT 400');
-    let racha = 0;
-    if (dias.length) {
-      const dia = f => Math.floor(new Date(f).getTime() / 86400000);
-      const hoy = Math.floor(Date.now() / 86400000);
-      let esperado = dia(dias[0].fecha);
-      if (hoy - esperado <= 1) {
-        for (const d of dias) {
-          if (dia(d.fecha) !== esperado) break;
-          racha++; esperado--;
-        }
-      }
-    }
-    v.racha_registros = racha;
+    v.racha_registros = rachaDeRegistros(dias.map(d => d.fecha));
 
     const { rows: [e] } = await db(
       `SELECT count(*) AS n FROM sesiones_gym
-        WHERE completada = true AND fecha >= CURRENT_DATE - INTERVAL '7 days'`);
+        WHERE completada = true AND fecha >= $1::date - 7`, [hoyStr()]);
     v.entrenos_semana = Number(e.n);
 
     const { rows: [vol] } = await db(
       `SELECT COALESCE(SUM(sr.peso * sr.reps), 0) AS kg
          FROM series_realizadas sr
          JOIN sesiones_gym s ON s.id = sr.sesion_id
-        WHERE sr.completada = true AND s.fecha >= CURRENT_DATE - INTERVAL '7 days'`);
+        WHERE sr.completada = true AND s.fecha >= $1::date - 7`, [hoyStr()]);
     v.volumen_semana = Math.round(Number(vol.kg));
 
     // De cada medida se coge el último valor que exista, no el de la última
@@ -1328,7 +1398,7 @@ app.post('/ejercicios', async (req, res) => {
 });
 
 app.put('/ejercicios/:id', async (req, res) => {
-  const { nombre, series, reps_objetivo, dataset_id } = req.body;
+  const { nombre, series, reps_objetivo, dataset_id, video_slug } = req.body;
   try {
     // COALESCE: mandar solo el campo que cambia no debe borrar los demás
     const { rows } = await db(
@@ -1336,13 +1406,16 @@ app.put('/ejercicios/:id', async (req, res) => {
           SET nombre        = COALESCE($2, nombre),
               series        = COALESCE($3, series),
               reps_objetivo = COALESCE($4, reps_objetivo),
-              dataset_id    = COALESCE($5, dataset_id)
+              dataset_id    = COALESCE($5, dataset_id),
+              video_slug    = COALESCE($6, video_slug)
         WHERE id=$1 RETURNING *`,
       [req.params.id,
        nombre != null && String(nombre).trim() ? String(nombre).trim() : null,
        series != null ? parseInt(series, 10) : null,
        reps_objetivo != null ? String(reps_objetivo) : null,
-       dataset_id != null ? String(dataset_id) : null]
+       dataset_id != null ? String(dataset_id) : null,
+       // "male/barbell-bench-press": la ruta relativa dentro del catálogo
+       video_slug != null && /^(male|female)\/[a-z0-9-]{1,80}$/.test(video_slug) ? video_slug : null]
     );
     if (!rows.length) return res.status(404).json({ error: 'No existe ese ejercicio' });
     res.json(rows[0]);
@@ -1386,35 +1459,215 @@ app.put('/rutinas/:id/orden', async (req, res) => {
   } finally { cliente.release(); }
 });
 
-// ── Medias del catálogo de ejercicios (GIF de técnica y miniatura) ──
+// ── Medias del catálogo de ejercicios (técnica y miniatura) ─────────
 // Se sirven desde aquí y no directamente desde GitHub por tres razones:
 // la app funciona aunque el repo de origen mueva las rutas otra vez (ya pasó:
 // la app pedía data/gifs/{id}.gif, que no existe), el service worker puede
 // cachearlas por ser del mismo origen, y así hay una sola URL para los
 // ejercicios sembrados y para los que se añadan desde el catálogo.
-const MEDIA_BASE  = 'https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main';
-const MEDIA_CACHE = path.join(__dirname, '.cache', 'ejercicios');
+//
+// LA TÉCNICA SE VEÍA MAL, Y NO ERA EL MÓVIL. Los tiempos por fotograma del GIF
+// de origen son «100 10 10 10 10 10 100 10 10 10 10 10» centisegundos: de los
+// 3 segundos que dura, DOS son fotogramas congelados. Por eso parecía que iba
+// a tirones — se para un segundo, avanza medio, y se vuelve a parar. Y el GIF
+// medía 180×180, que estirado al ancho del móvil son cinco aumentos: de ahí el
+// pixelado. Se arregla en tres capas:
+//
+//   1. Se busca la animación primero en el catálogo de 360×360 (omercotkd,
+//      MIT), que es la MISMA animación sin reducir. El doble de píxeles, y
+//      reales: no interpolados. El de 180 queda de respaldo.
+//   2. El GIF se guarda con la cadencia uniforme (10 fps, su velocidad real de
+//      movimiento). Esto no necesita nada instalado y ya quita los saltos.
+//   3. Si hay ffmpeg, además se genera un MP4 con escalado lanczos y un punto
+//      de enfoque: 720×720 partiendo de los 360, o 540×540 si hubo que tirar
+//      del respaldo. Aun así pesa menos que el GIF de 180 que se servía antes,
+//      no se congela y el móvil lo decodifica por hardware.
+//
+// Sin ffmpeg el MP4 devuelve 404 y la app usa el GIF ya arreglado: la mejora
+// de los puntos 1 y 2 se nota igual, así que nada depende de que lo tenga.
+//
+// Los dos catálogos usan el mismo id de cuatro dígitos, así que el mismo
+// número identifica al mismo ejercicio en los dos. Lo que solo tiene el viejo
+// son las miniaturas .jpg y el hash del media en el nombre.
+const MEDIA_BASE    = 'https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main';
+const MEDIA_BASE_HD = 'https://raw.githubusercontent.com/omercotkd/exercises-gifs/main/assets';
+// El sufijo de versión invalida el caché anterior de golpe: los archivos ya
+// guardados tienen dentro los tiempos malos y la resolución vieja, y sin esto
+// no se volverían a pedir nunca.
+const MEDIA_CACHE = path.join(__dirname, '.cache', 'ejercicios-v3');
+const GIF_DELAY   = 10;                  // centisegundos por fotograma
+const GIF_FPS     = 100 / GIF_DELAY;     // = 10 fps, la velocidad real del movimiento
+
+const { execFile } = require('child_process');
+const FFMPEG = (() => {
+  try {
+    require('child_process').execFileSync('ffmpeg', ['-version'], { stdio: 'ignore', timeout: 5000 });
+    return true;
+  } catch { return false; }
+})();
+
+// Reescribe los tiempos de cada fotograma a una cadencia constante.
+// Recorre la estructura del GIF de verdad (cabecera → bloques) en vez de
+// buscar el patrón 21 F9 04 a ciegas, que también aparece dentro de los
+// datos comprimidos de imagen y corrompería el archivo.
+function gifCadenciaUniforme(buf) {
+  try {
+    if (buf.length < 14 || buf.toString('ascii', 0, 3) !== 'GIF') return buf;
+    const out = Buffer.from(buf);
+    let i = 13 + ((out[10] & 0x80) ? 3 * (2 << (out[10] & 7)) : 0);  // tras la paleta global
+    let tocados = 0;
+    while (i < out.length) {
+      const sep = out[i];
+      if (sep === 0x21) {                       // bloque de extensión
+        if (out[i + 1] === 0xF9 && out[i + 2] === 0x04) {
+          out.writeUInt16LE(GIF_DELAY, i + 4);  // control gráfico: aquí vive el tiempo
+          tocados++;
+        }
+        i += 2;
+        while (i < out.length && out[i] !== 0) i += out[i] + 1;
+        i++;
+      } else if (sep === 0x2C) {                // descriptor de imagen
+        const flags = out[i + 9];
+        i += 10 + ((flags & 0x80) ? 3 * (2 << (flags & 7)) : 0) + 1;
+        while (i < out.length && out[i] !== 0) i += out[i] + 1;
+        i++;
+      } else break;                             // 0x3B (fin) o basura: se para
+    }
+    return tocados ? out : buf;
+  } catch { return buf; }                       // ante la duda, el original
+}
+
+// Un GIF pedido a la vez por dos pantallas no se transcodifica dos veces
+const _transcodificando = new Map();
+
+function gifAMp4(origen, destino) {
+  if (_transcodificando.has(destino)) return _transcodificando.get(destino);
+
+  // El ancho de origen manda: desde 360 basta con doblar para llegar a 720 con
+  // detalle de verdad; desde el respaldo de 180 hay que triplicar y aun así se
+  // queda en 540, porque más aumento no inventa píxeles que no existen.
+  // Medido sobre el mismo ejercicio: 720 desde 360 son 87 KB y 540 desde 180
+  // son 59 KB — los dos por debajo de los 91 KB del GIF que se servía antes.
+  const ancho  = anchoGif(origen);
+  const grande = ancho >= 300;
+  const factor = grande ? 2 : 3;
+  const crf    = grande ? '30' : '28';
+
+  const trabajo = new Promise((resolve, reject) => {
+    execFile('ffmpeg', [
+      '-y', '-v', 'error', '-i', origen,
+      // setpts reparte los fotogramas a intervalos iguales: es lo que borra
+      // las dos congelaciones de un segundo del original.
+      '-vf', `setpts=N/(${GIF_FPS}*TB),` +
+             `scale='trunc(iw*${factor}/2)*2':'trunc(ih*${factor}/2)*2':flags=lanczos,` +
+             'unsharp=5:5:0.7:5:5:0.0,format=yuv420p',
+      '-r', String(GIF_FPS),
+      '-an', '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
+      '-crf', crf, '-movflags', '+faststart', destino
+    ], { timeout: 30000 }, (err) => (err ? reject(err) : resolve(destino)));
+  }).finally(() => _transcodificando.delete(destino));
+  _transcodificando.set(destino, trabajo);
+  return trabajo;
+}
+
+// Ancho en píxeles leído de la cabecera del GIF (bytes 6-7, little endian).
+// Si el archivo no se deja leer se asume el pequeño: escalar de más es peor
+// que quedarse corto, porque hincha el peso sin añadir detalle.
+function anchoGif(ruta) {
+  try {
+    const cab = Buffer.alloc(10);
+    const fd = fs.openSync(ruta, 'r');
+    fs.readSync(fd, cab, 0, 10, 0);
+    fs.closeSync(fd);
+    return cab.toString('ascii', 0, 3) === 'GIF' ? cab.readUInt16LE(6) : 0;
+  } catch { return 0; }
+}
+
+// Descarga (y cachea) la animación ya con la cadencia arreglada. Primero la
+// buena de 360, y si ese ejercicio no está allí, la de 180 de siempre.
+async function gifCacheado(nombre) {
+  const destino = path.join(MEDIA_CACHE, nombre);
+  if (fs.existsSync(destino)) return destino;
+
+  const id = nombre.slice(0, 4);   // "0025-EIeI8Vf.gif" → "0025"
+  let r = await fetch(`${MEDIA_BASE_HD}/${id}.gif`).catch(() => null);
+  if (!r?.ok) r = await fetch(`${MEDIA_BASE}/videos/${nombre}`).catch(() => null);
+  if (!r?.ok) return null;
+
+  fs.mkdirSync(MEDIA_CACHE, { recursive: true });
+  fs.writeFileSync(destino, gifCadenciaUniforme(Buffer.from(await r.arrayBuffer())));
+  return destino;
+}
+
+// ── Vídeo real de técnica (una persona haciendo el ejercicio) ───────
+// De free-exercise-db-with-videos (MIT). Se sirve desde aquí y no desde su
+// bucket por lo mismo que las animaciones: el service worker solo cachea lo
+// del mismo origen, y si ese repositorio desaparece mañana nos quedamos con
+// lo que ya se haya pedido. Son 1920×1080 y ~330 KB, así que solo se descarga
+// cuando pulsas «ver en vídeo» — nunca al abrir la ficha.
+const VIDEO_BASE  = 'https://pub-585d42eb1aa64a67aedf483ec328d3fe.r2.dev';
+const VIDEO_CACHE = path.join(__dirname, '.cache', 'videos');
+
+app.get('/ejercicios/video/:sexo/:archivo', async (req, res) => {
+  const { sexo, archivo } = req.params;
+  if (!/^(male|female)$/.test(sexo) || !/^[a-z0-9-]{1,80}\.(mp4|jpg)$/.test(archivo)) {
+    return res.status(400).json({ error: 'Nombre de archivo no válido' });
+  }
+  const esVideo  = archivo.endsWith('.mp4');
+  const carpeta  = esVideo ? 'exercise-videos' : 'exercise-posters';
+  const destino  = path.join(VIDEO_CACHE, sexo, archivo);
+
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.type(esVideo ? 'video/mp4' : 'image/jpeg');
+
+  try {
+    if (fs.existsSync(destino)) return res.send(fs.readFileSync(destino));
+    const r = await fetch(`${VIDEO_BASE}/${carpeta}/${sexo}/${archivo}`);
+    if (!r.ok) return res.status(404).json({ error: 'Ese ejercicio no tiene vídeo' });
+    const buf = Buffer.from(await r.arrayBuffer());
+    fs.mkdirSync(path.join(VIDEO_CACHE, sexo), { recursive: true });
+    fs.writeFileSync(destino, buf);
+    res.send(buf);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
 
 app.get('/ejercicios/media/:archivo', async (req, res) => {
   const nombre = req.params.archivo;
-  // Nombre estricto ({id}-{media_id}.gif): sin esto, "../../" saldría del caché
-  if (!/^\d{4}-[A-Za-z0-9_-]{1,32}\.(gif|jpg)$/.test(nombre)) {
+  // Nombre estricto ({id}-{media_id}.ext): sin esto, "../../" saldría del caché
+  if (!/^\d{4}-[A-Za-z0-9_-]{1,32}\.(gif|jpg|mp4)$/.test(nombre)) {
     return res.status(400).json({ error: 'Nombre de archivo no válido' });
   }
-  const esGif   = nombre.endsWith('.gif');
-  const destino = path.join(MEDIA_CACHE, nombre);
-  const tipo    = esGif ? 'image/gif' : 'image/jpeg';
+  const ext  = nombre.slice(nombre.lastIndexOf('.') + 1);
+  const tipo = { gif: 'image/gif', jpg: 'image/jpeg', mp4: 'video/mp4' }[ext];
 
   // El nombre lleva dentro el id del media, así que un archivo nunca cambia
   res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
 
   try {
-    if (fs.existsSync(destino)) return res.type(tipo).send(fs.readFileSync(destino));
+    if (ext === 'mp4') {
+      if (!FFMPEG) return res.status(404).json({ error: 'Sin ffmpeg: usa el GIF' });
+      const destino = path.join(MEDIA_CACHE, nombre);
+      if (!fs.existsSync(destino)) {
+        const gif = await gifCacheado(nombre.replace(/\.mp4$/, '.gif'));
+        if (!gif) return res.status(404).json({ error: 'No está en el catálogo' });
+        await gifAMp4(gif, destino);
+      }
+      return res.type(tipo).send(fs.readFileSync(destino));
+    }
 
-    const r = await fetch(`${MEDIA_BASE}/${esGif ? 'videos' : 'images'}/${nombre}`);
+    if (ext === 'gif') {
+      const destino = await gifCacheado(nombre);
+      if (!destino) return res.status(404).json({ error: 'No está en el catálogo' });
+      return res.type(tipo).send(fs.readFileSync(destino));
+    }
+
+    const destino = path.join(MEDIA_CACHE, nombre);
+    if (fs.existsSync(destino)) return res.type(tipo).send(fs.readFileSync(destino));
+    const r = await fetch(`${MEDIA_BASE}/images/${nombre}`);
     if (!r.ok) return res.status(404).json({ error: 'No está en el catálogo' });
     const buf = Buffer.from(await r.arrayBuffer());
-
     fs.mkdirSync(MEDIA_CACHE, { recursive: true });
     fs.writeFileSync(destino, buf);
     res.type(tipo).send(buf);
@@ -2126,17 +2379,21 @@ app.post('/party/salir', async (req, res) => {
 app.get('/cruce/:dias?', async (req, res) => {
   const dias = Math.min(180, Math.max(7, parseInt(req.params.dias || '30', 10)));
   try {
+    // $2 es hoy en TU zona horaria, no CURRENT_DATE. El servidor corre en UTC:
+    // con CURRENT_DATE, entre medianoche y las 2 de la mañana el eje de fechas
+    // (que sí se construye con hoyStr) pedía una ventana desplazada un día y
+    // la última columna de la gráfica salía vacía.
     const [logsQ, comidasQ, sesQ, proyQ] = await Promise.all([
       db(`SELECT fecha, sueno, energia, nutricion, entreno_completado,
                  tareas_completadas, tareas_total
             FROM daily_logs
-           WHERE fecha >= CURRENT_DATE - $1::int ORDER BY fecha`, [dias]),
+           WHERE fecha >= $2::date - $1::int ORDER BY fecha`, [dias, hoyStr()]),
       db(`SELECT fecha, SUM(calorias) AS kcal, SUM(proteinas) AS prot
-            FROM comidas WHERE fecha >= CURRENT_DATE - $1::int
-           GROUP BY fecha ORDER BY fecha`, [dias]).catch(() => ({ rows: [] })),
+            FROM comidas WHERE fecha >= $2::date - $1::int
+           GROUP BY fecha ORDER BY fecha`, [dias, hoyStr()]).catch(() => ({ rows: [] })),
       db(`SELECT fecha, COUNT(*) AS n FROM sesiones_gym
-           WHERE fecha >= CURRENT_DATE - $1::int AND completada
-           GROUP BY fecha ORDER BY fecha`, [dias]).catch(() => ({ rows: [] })),
+           WHERE fecha >= $2::date - $1::int AND completada
+           GROUP BY fecha ORDER BY fecha`, [dias, hoyStr()]).catch(() => ({ rows: [] })),
       db(`SELECT AVG(progreso)::numeric(5,1) AS medio FROM proyectos WHERE progreso < 100`)
         .catch(() => ({ rows: [{ medio: null }] }))
     ]);
@@ -2352,76 +2609,104 @@ app.post('/ia/resumen', async (req, res) => {
 // ════════════════════════════════════════════════════════
 // RESUMEN DEL DÍA (dashboard de solo lectura)
 // ════════════════════════════════════════════════════════
+// La cascada del sueño: lo que registraste > lo que midió Strava > lo último
+// que hay. Vive aparte porque es la única parte de /resumen que sí es
+// secuencial de verdad, y así no arrastra al resto.
+async function datosSueno(fecha) {
+  const { rows } = await db('SELECT sueno FROM daily_logs WHERE fecha = $1', [fecha])
+    .catch(() => ({ rows: [] }));
+  if (rows[0]?.sueno && parseFloat(rows[0].sueno) > 0) {
+    return { horas: parseFloat(rows[0].sueno), fuente: 'manual', de: null };
+  }
+
+  const { rows: stravaS } = await db(
+    `SELECT datos_raw FROM strava_activities
+      WHERE tipo ILIKE 'Sleep' AND fecha::date = $1 LIMIT 1`, [fecha]
+  ).catch(() => ({ rows: [] }));
+  if (stravaS.length) {
+    const raw = stravaS[0].datos_raw || {};
+    const h = raw.moving_time ? +(raw.moving_time / 3600).toFixed(1) : null;
+    if (h) return { horas: h, fuente: 'strava', de: null };
+  }
+
+  // Último recurso: el sueño del último día que sí se registró. Se enseña para
+  // no dejar la tarjeta en blanco, pero va marcado como 'heredado' y con su
+  // fecha. Antes salía como 'manual', o sea, indistinguible de un dato de hoy:
+  // la pantalla decía que habías dormido 7,5 h anoche cuando esa cifra era de
+  // hace tres días. Un dato prestado que se presenta como propio es peor que
+  // no tener dato — y además escondía el botón de registrar el sueño de hoy.
+  const { rows: last } = await db(
+    'SELECT sueno, fecha FROM daily_logs WHERE sueno > 0 AND fecha < $1::date ORDER BY fecha DESC LIMIT 1',
+    [fecha]
+  ).catch(() => ({ rows: [] }));
+  if (last.length) {
+    return {
+      horas:  parseFloat(last[0].sueno),
+      fuente: 'heredado',
+      de:     new Date(last[0].fecha).toISOString().slice(0, 10)
+    };
+  }
+  return { horas: null, fuente: 'none', de: null };
+}
+
 app.get('/resumen/:fecha', async (req, res) => {
   const fecha = req.params.fecha; // "YYYY-MM-DD"
   try {
-    // ── 1. Sueño ────────────────────────────────────────
-    const { rows: logRows } = await db(
-      'SELECT sueno, notas FROM daily_logs WHERE fecha = $1', [fecha]
-    );
-    const logHoy = logRows[0] || null;
-    let sueno_horas = null;
-    let sueno_fuente = 'none';
-    const nota = logHoy?.notas || '';
+    // Esta es la pantalla de arranque y pedía sus veinte consultas en fila
+    // india, cada una esperando a que terminara la anterior aunque no
+    // dependiera de ella. Son independientes: van todas a la vez. Lo único
+    // encadenado de verdad es la cascada del sueño, y se resuelve dentro de
+    // datosSueno() sin frenar al resto.
+    const [
+      logRows, sueno, comidas, objDia, sesRows, rutinas, stravaA,
+      proyRows, auto, tareasCont, mision, ing
+    ] = await Promise.all([
+      db('SELECT notas FROM daily_logs WHERE fecha = $1', [fecha])
+        .then(r => r.rows).catch(() => []),
+      datosSueno(fecha),
+      db('SELECT calorias, proteinas FROM comidas WHERE fecha = $1', [fecha])
+        .then(r => r.rows).catch(() => []),
+      objetivosDe(),
+      db('SELECT s.completada FROM sesiones_gym s WHERE s.fecha = $1', [fecha])
+        .then(r => r.rows).catch(() => []),
+      db('SELECT nombre, dias FROM rutinas').then(r => r.rows).catch(() => []),
+      db(`SELECT id FROM strava_activities
+           WHERE tipo NOT ILIKE 'Sleep' AND fecha::date = $1 LIMIT 1`, [fecha])
+        .then(r => r.rows).catch(() => []),
+      db('SELECT * FROM proyectos').then(r => r.rows).catch(() => []),
+      valoresAutomaticos(),
+      contarTareas(),
+      // Solo para hoy: pedir el resumen de una fecha pasada no debe crear
+      // misiones retroactivas que nunca se ofrecieron.
+      fecha === hoyStr()
+        ? misionDelDia(fecha).catch(e => { console.error('misión:', e.message); return null; })
+        : Promise.resolve(null),
+      valoresIngles()
+    ]);
 
-    if (logHoy?.sueno && parseFloat(logHoy.sueno) > 0) {
-      sueno_horas = parseFloat(logHoy.sueno);
-      sueno_fuente = 'manual';
-    } else {
-      // Intenta Strava (tipo Sleep) para esa fecha
-      const { rows: stravaS } = await db(
-        `SELECT datos_raw FROM strava_activities
-         WHERE tipo ILIKE 'Sleep' AND fecha::date = $1 LIMIT 1`, [fecha]
-      ).catch(() => ({ rows: [] }));
-      if (stravaS.length) {
-        const raw = stravaS[0].datos_raw || {};
-        sueno_horas = raw.moving_time ? +(raw.moving_time / 3600).toFixed(1) : null;
-        if (sueno_horas) sueno_fuente = 'strava';
-      }
-      // Fallback: último daily_log con sueño
-      if (!sueno_horas) {
-        const { rows: last } = await db(
-          'SELECT sueno FROM daily_logs WHERE sueno > 0 ORDER BY fecha DESC LIMIT 1'
-        ).catch(() => ({ rows: [] }));
-        if (last.length) { sueno_horas = parseFloat(last[0].sueno); sueno_fuente = 'manual'; }
-      }
-    }
+    // ── 1. Sueño ────────────────────────────────────────
+    const sueno_horas  = sueno.horas;
+    const sueno_fuente = sueno.fuente;
+    const sueno_fecha  = sueno.de;
+    const nota = logRows[0]?.notas || '';
 
     // ── 2. Nutrición ─────────────────────────────────────
-    const { rows: comidas } = await db(
-      'SELECT calorias, proteinas FROM comidas WHERE fecha = $1', [fecha]
-    ).catch(() => ({ rows: [] }));
     const calorias_consumidas = Math.round(comidas.reduce((s, c) => s + (c.calorias || 0), 0));
     const proteinas_consumidas = Math.round(comidas.reduce((s, c) => s + parseFloat(c.proteinas || 0), 0));
     // Los objetivos salen de la tabla, no de números escritos aquí: esta pantalla
     // decía 2200/160 mientras la de nutrición decía 2400/180, y ninguna de las dos
     // hacía caso a lo que él hubiera editado en la app.
-    const objDia = await objetivosDe();
     const calorias_objetivo  = objDia.calorias;
     const proteinas_objetivo = objDia.proteinas;
 
     // ── 3. Sesión gym ────────────────────────────────────
-    const { rows: sesRows } = await db(
-      `SELECT s.completada FROM sesiones_gym s WHERE s.fecha = $1`, [fecha]
-    ).catch(() => ({ rows: [] }));
     const sesion_gym_hoy = sesRows.length > 0 && !!sesRows[0].completada;
 
     // ── 4. Rutina planificada ────────────────────────────
-    // Noon UTC para evitar problemas de timezone en el getDay()
-    const dDate = new Date(fecha + 'T12:00:00Z');
-    const diaLabel = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][dDate.getUTCDay()];
-    const { rows: rutinas } = await db('SELECT nombre, dias FROM rutinas').catch(() => ({ rows: [] }));
-    const rutinaHoy = rutinas.find(r => {
-      const dias = Array.isArray(r.dias) ? r.dias : (typeof r.dias === 'string' ? JSON.parse(r.dias) : []);
-      return dias.map(d => String(d).toLowerCase()).includes(diaLabel);
-    });
+    const rutinaHoy = rutinaDeLaFecha(rutinas, fecha);
     const rutina_hoy = rutinaHoy ? rutinaHoy.nombre : 'Descanso';
 
     // ── 5. Strava actividad (no sleep) ───────────────────
-    const { rows: stravaA } = await db(
-      `SELECT id FROM strava_activities
-       WHERE tipo NOT ILIKE 'Sleep' AND fecha::date = $1 LIMIT 1`, [fecha]
-    ).catch(() => ({ rows: [] }));
     const strava_actividad_hoy = stravaA.length > 0;
 
     // ── 6. Proyectos activos ─────────────────────────────
@@ -2429,8 +2714,7 @@ app.get('/resumen/:fecha', async (req, res) => {
     // a sus hijos, así que proponerlo como tarea del día no diría qué hacer.
     // Y antes que lo más atrasado va lo que ni siquiera tiene fin declarado:
     // sin meta no hay forma de saber si eso avanza.
-    const { rows: proyRows } = await db('SELECT * FROM proyectos').catch(() => ({ rows: [] }));
-    const hojas = decorarProyectos(aplicarFuentes(proyRows, await valoresAutomaticos()), await contarTareas())
+    const hojas = decorarProyectos(aplicarFuentes(proyRows, auto), tareasCont)
       .filter(p => !p.es_padre && p.progreso_real < 100)
       .sort((a, b) => (a.sin_meta === b.sin_meta)
         ? a.progreso_real - b.progreso_real
@@ -2440,17 +2724,11 @@ app.get('/resumen/:fecha', async (req, res) => {
     const proyecto_prioritario = hojas[0]?.nombre || null;
 
     // ── 6a. Misión del día ───────────────────────────────
-    // Solo para hoy: pedir el resumen de una fecha pasada no debe crear
-    // misiones retroactivas que nunca se ofrecieron.
-    const mision = fecha === hoyStr()
-      ? await misionDelDia(fecha).catch(e => { console.error('misión:', e.message); return null; })
-      : null;
     if (mision) mision.mensaje = await mensajeDeAliento(mision, fecha);
 
     // ── 6b. Inglés ───────────────────────────────────────
     // OKIRO no enseña idiomas: mide y recuerda. La tarjeta de HOY dice si
     // quedan repasos y lleva a tutoringles, que es donde se estudia.
-    const ing = await valoresIngles();
     const proyIngles = proyRows.find(p => (p.fuente || '').startsWith('ingles'));
     const ingles = ing.ingles_total != null ? {
       repasos_hoy: ing.ingles_repasos_hoy,
@@ -2465,7 +2743,11 @@ app.get('/resumen/:fecha', async (req, res) => {
     } : null;
 
     // ── 7. Score de energía ──────────────────────────────
-    const sueno_score = Math.min(1, (sueno_horas || 0) / 8) * 40;
+    // El sueño heredado NO puntúa: si contara, un día sin registrar heredaría
+    // los 40 puntos del último día bueno y la energía de hoy saldría alta sin
+    // que hayas hecho nada. Lo que no es de hoy no puntúa hoy.
+    const sueno_propio = sueno_fuente === 'heredado' ? 0 : (sueno_horas || 0);
+    const sueno_score = Math.min(1, sueno_propio / 8) * 40;
     const nutri_ratio = calorias_objetivo > 0 ? Math.min(1, calorias_consumidas / calorias_objetivo) : 0;
     const nutri_score = nutri_ratio * 35;
     const act_score   = (sesion_gym_hoy || strava_actividad_hoy) ? 25 : 0;
@@ -2475,6 +2757,7 @@ app.get('/resumen/:fecha', async (req, res) => {
       fecha,
       sueno_horas,
       sueno_fuente,
+      sueno_fecha,
       calorias_consumidas,
       calorias_objetivo,
       proteinas_consumidas,
@@ -2507,9 +2790,13 @@ app.patch('/logs/:fecha/nota', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Fallback SPA: cualquier GET no-API sirve el index ────
+// No hay fallback de SPA a propósito. Aquí había un comentario que prometía
+// uno ("cualquier GET no-API sirve el index") y debajo no había nada: la app
+// vive entera en "/" y cambia de sección por JavaScript, sin rutas propias.
+// Devolver el index ante cualquier ruta desconocida taparía además los 404 de
+// la API, que es justo lo que hace falta ver cuando algo se llama mal.
 app.listen(PORT, () => {
-  console.log(`OKIRO Backend v4.2 · :${PORT}`);
+  console.log(`OKIRO Backend v7.2.0 · :${PORT}`);
   console.log(`· Auth:  ${APP_TOKEN ? 'ACTIVADA (APP_TOKEN)' : 'DESACTIVADA — define APP_TOKEN en producción'}`);
   if (APP_TOKEN && APP_TOKEN.length < 24) {
     console.warn(`· ⚠ CLAVE DÉBIL: ${APP_TOKEN.length} caracteres. Detrás de esta clave están tu base de datos`);

@@ -57,6 +57,7 @@ function cargarTecnica() {
 }
 
 const gifDe  = c => c ? `${GYM_MEDIA}${c.id}-${c.m}.gif` : '';
+const mp4De  = c => c ? `${GYM_MEDIA}${c.id}-${c.m}.mp4` : '';
 const miniDe = c => c ? `${GYM_MEDIA}${c.id}-${c.m}.jpg` : '';
 
 function gesc(s) {
@@ -199,7 +200,11 @@ function renderRutinaSelect() {
 }
 
 const GYM_ICONS = { 'PUSH': OKICON.dumbbell, 'PULL': OKICON.pull, 'LEGS': OKICON.legs };
-const GYM_BANNERS = { 'PUSH': 'assets/gym-push.png', 'PULL': 'assets/gym-pull.png', 'LEGS': 'assets/gym-legs.png' };
+// En WebP y no en PNG: son los mismos 1376×768, pero 27 KB en vez de 1.017.
+// Los tres banners juntos bajan de 2,6 MB a 77 KB, que en el gimnasio con dos
+// rayas de cobertura es la diferencia entre verlos y no verlos. El PNG sigue
+// en assets/ como original: de ahí salen los WebP si hay que regenerarlos.
+const GYM_BANNERS = { 'PUSH': 'assets/gym-push.webp', 'PULL': 'assets/gym-pull.webp', 'LEGS': 'assets/gym-legs.webp' };
 
 async function renderGymObjectives() {
   const wrap = document.getElementById('gym-objectives-wrap');
@@ -398,14 +403,20 @@ async function verTecnica(ejId) {
   await cargarCatalogo();
   const cat = ej.dataset_id ? _catIdx.get(ej.dataset_id) : null;
   if (!cat) return elegirEjercicioCatalogo(ejId);
-  abrirVisorTecnica(cat, ej.nombre);
+  // El vídeo de persona real es del ejercicio, no del catálogo: se pasa aparte
+  abrirVisorTecnica(cat, ej.nombre, { slug: ej.video_slug, aprox: ej.video_aprox });
 }
 
-/** Abre el visor para una ficha del catálogo. `titulo` es el nombre propio. */
-async function abrirVisorTecnica(cat, titulo) {
+/** Abre el visor para una ficha del catálogo. `titulo` es el nombre propio.
+    `video` es el clip de persona real, si ese ejercicio tiene uno mapeado. */
+async function abrirVisorTecnica(cat, titulo, video = null) {
   const ov   = document.getElementById('tecnica-overlay');
   const body = document.getElementById('tecnica-body');
   if (!ov || !body) return;
+
+  _tecVideo   = video?.slug ? video : null;   // lo lee alternarVistaTecnica()
+  _tecCat     = cat;
+  _tecEnVideo = false;                        // siempre se abre por la animación
 
   ov.style.display = 'flex';
   document.body.style.overflow = 'hidden';
@@ -418,10 +429,11 @@ async function abrirVisorTecnica(cat, titulo) {
       </div>
       <button class="tec-cerrar" onclick="cerrarVisorTecnica()" aria-label="Cerrar">${OKICON.cross}</button>
     </div>
-    <div class="tec-gif-wrap">
-      <img class="tec-gif" src="${gifDe(cat)}" alt="Animación de ${gesc(cat.n)}"
-           onerror="gifNoCarga(this)">
-    </div>
+    <div class="tec-gif-wrap" id="tec-medio">${vistaAnimacion(cat)}</div>
+    ${video?.slug ? `
+      <button class="tec-cambiar" id="tec-cambiar" onclick="alternarVistaTecnica()">
+        ${OKICON.play} VER EN VÍDEO
+      </button>` : ''}
     <div class="tech-muscles">
       <span class="muscle-badge primary">${gesc(cat.t)}</span>
       ${cat.s.map(m => `<span class="muscle-badge secondary">${gesc(m)}</span>`).join('')}
@@ -437,6 +449,63 @@ async function abrirVisorTecnica(cat, titulo) {
     ? `<div class="tec-pasos-tit">CÓMO SE HACE</div>
        <ol class="tech-instructions">${pasos.map(p => `<li>${gesc(p)}</li>`).join('')}</ol>`
     : '<div class="tech-loading">Este ejercicio no trae instrucciones.</div>';
+}
+
+/* ── Las dos vistas del visor ────────────────────────────────────────
+   La animación es la de casa: 85 KB, arranca sola y se queda en bucle
+   corto, que es lo que se mira de reojo entre series. El vídeo de una
+   persona son 330 KB en Full HD y solo se descarga si lo pides: en el
+   gimnasio la cobertura es mala y no se gasta en lo que no has pedido. */
+let _tecVideo = null, _tecCat = null, _tecEnVideo = false;
+
+function vistaAnimacion(cat) {
+  return `<video class="tec-gif" src="${mp4De(cat)}" poster="${miniDe(cat)}"
+                 autoplay loop muted playsinline disablepictureinpicture
+                 aria-label="Animación de ${gesc(cat.n)}"
+                 onerror="tecnicaSinVideo(this, '${gifDe(cat)}', '${gesc(cat.n)}')"></video>`;
+}
+
+function vistaVideoReal(v) {
+  const base = `ejercicios/video/${v.slug}`;
+  return `<video class="tec-gif tec-real" src="${base}.mp4" poster="${base}.jpg"
+                 autoplay loop muted playsinline controls
+                 aria-label="Vídeo de una persona haciendo el ejercicio"
+                 onerror="tecnicaVideoNoCarga(this)"></video>
+          ${v.aprox ? `<p class="tec-aviso">Es la variante filmada más parecida, no
+             exactamente tu ejercicio. Para el recorrido exacto, mira la animación.</p>` : ''}`;
+}
+
+function alternarVistaTecnica() {
+  const cont = document.getElementById('tec-medio');
+  const btn  = document.getElementById('tec-cambiar');
+  if (!cont || !_tecCat) return;
+  _tecEnVideo = !_tecEnVideo;
+  cont.innerHTML = _tecEnVideo ? vistaVideoReal(_tecVideo) : vistaAnimacion(_tecCat);
+  cont.classList.toggle('con-video', _tecEnVideo);
+  if (btn) btn.innerHTML = _tecEnVideo
+    ? `${OKICON.dumbbell} VER LA ANIMACIÓN`
+    : `${OKICON.play} VER EN VÍDEO`;
+}
+
+/** El clip pesa 330 KB: con mala cobertura puede no llegar. Se dice y se
+    vuelve a la animación, que a esas alturas ya está cacheada. */
+function tecnicaVideoNoCarga(el) {
+  const cont = document.getElementById('tec-medio');
+  if (!cont) return;
+  toast('No se pudo cargar el vídeo. Vuelvo a la animación.', 'error');
+  _tecEnVideo = false;
+  cont.innerHTML = vistaAnimacion(_tecCat);
+  const btn = document.getElementById('tec-cambiar');
+  if (btn) btn.innerHTML = `${OKICON.play} VER EN VÍDEO`;
+}
+
+/** Sin MP4 (servidor sin ffmpeg, o formato no soportado) se cae al GIF, que
+    ya viene con la cadencia arreglada. La técnica se ve igual, solo pesa más. */
+function tecnicaSinVideo(video, gif, nombre) {
+  const wrap = video.parentElement;
+  if (!wrap) return;
+  wrap.innerHTML =
+    `<img class="tec-gif" src="${gif}" alt="Animación de ${nombre}" onerror="gifNoCarga(this)">`;
 }
 
 /** El GIF viene del catálogo por la red: si falla, se dice, no se deja el hueco. */

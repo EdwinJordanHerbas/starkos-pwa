@@ -402,8 +402,16 @@
  </nav>
 </div>
 
-<!-- mock.js solo se activa en desarrollo con ?mock=1 — inofensivo en producción -->
-<script src="mock.js"></script>
+<!-- mock.js solo hace algo con ?mock=1, pero antes se descargaba SIEMPRE: 16 KB
+     que en producción no ejecutan ni una línea. Ahora solo se pide cuando toca.
+     Va con document.write y no con appendChild porque tiene que estar cargado
+     ANTES que app.js —es quien intercepta fetch—, y aquí es seguro: el parser
+     está leyendo el documento, no se ha terminado de cargar nada. -->
+<script>
+  if (/[?&]mock=1/.test(location.search) || localStorage.getItem('OKIRO_MOCK') === '1') {
+    document.write('<script src="mock.js"><\/script>');
+  }
+</script>
 <script src="src/js/app.js"></script>
 <script src="src/js/projects.js"></script>
 <script src="src/js/gym.js"></script>

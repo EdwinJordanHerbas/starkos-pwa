@@ -48,57 +48,9 @@
 /* HOY — Dashboard y registro diario                               */
 /* ════════════════════════════════════════════════════════════════ */
 
-.dashboard-grid {
-  display:               grid;
-  grid-template-columns: 1fr 1fr;
-  gap:                   12px;
-  margin-bottom:         16px;
-}
-
-.dash-card {
-  background:     var(--surface-1);
-  box-shadow:    inset 0 0 0 0.5px rgba(255,255,255,0.08);
-  padding:        14px;
-  display:        flex;
-  flex-direction: column;
-  gap:            4px;
-  cursor:         pointer;
-  transition:     all var(--transition);
-  position:       relative;
-}
-
-.dash-card:active {
-  box-shadow: inset 0 0 0 0.5px var(--brand), 0 0 12px var(--glow);
-}
-
-.dash-card-icon  { font-size: 20px; margin-bottom: 4px; }
-
-.dash-card-label {
-  font-family:    var(--font-sans);
-  font-size:      9px;
-  color:          var(--text-3);
-  text-transform: uppercase;
-}
-
-.dash-card-value {
-  font-family: var(--font-sans);
-  font-size:   18px;
-  color:       var(--brand);
-  font-weight: 400;
-}
-
-.dash-card-sub {
-  font-family: var(--font-sans);
-  font-size:   10px;
-  color:       var(--text-4);
-}
-
-.dash-card.done {
-  box-shadow: inset 0 0 0 0.5px var(--success);
-  background: rgba(52, 211, 153, 0.05);
-}
-
-.dash-card.done .dash-card-value { color: var(--success); }
+/* Aquí vivía .dashboard-grid con sus .dash-card: el panel de tarjetas
+   que sustituyeron las .hoy-check-card. Ninguna de sus nueve reglas se
+   usaba ya en la app. */
 
 /* ── DATE NAVIGATOR ─────────────────────────────────────────────── */
 .date-nav {
@@ -2245,7 +2197,43 @@ a.hoy-check-card:hover {
   overflow: hidden; margin-bottom: 12px;
   min-height: 180px;
 }
-.tec-gif { width: 100%; max-width: 320px; height: auto; display: block; }
+/* La animación viene a 720 px del backend y se enseña a 340: por encima de eso
+   se estira más de lo que el material da y reaparece el pixelado que teníamos. */
+.tec-gif {
+  width: 100%; max-width: 340px; height: auto;
+  display: block; background: #fff;
+}
+
+/* El vídeo de persona real está grabado en 16:9 y sobre fondo oscuro, así que
+   ni se limita a 340 ni se pone sobre blanco: se le deja el ancho de la hoja. */
+.tec-gif-wrap.con-video { background: #000; display: block; }
+.tec-real { max-width: 100%; background: #000; }
+
+.tec-cambiar {
+  width: 100%; height: 42px; margin-bottom: 12px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: rgba(255,255,255,0.04);
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.10);
+  border: none; border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-family: var(--font-sans); font-size: 11px;
+  letter-spacing: 1.4px; text-transform: uppercase;
+  cursor: pointer; transition: all var(--transition);
+}
+.tec-cambiar:hover, .tec-cambiar:focus-visible {
+  color: var(--text-1);
+  box-shadow: inset 0 0 0 1px var(--brand);
+  outline: none;
+}
+.tec-cambiar svg { width: 15px; height: 15px; }
+
+/* Cuando el clip no es exactamente tu ejercicio, se dice. Enseñar otra cosa
+   sin avisar es peor que no enseñar nada. */
+.tec-aviso {
+  margin: 8px 0 0;
+  font-family: var(--font-sans); font-size: 11.5px; line-height: 1.5;
+  color: var(--warning);
+}
 
 .tec-pasos { margin-top: 14px; }
 

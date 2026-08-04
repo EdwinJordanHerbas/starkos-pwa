@@ -30,7 +30,7 @@ cp -r "$SRC/assets" /opt/pwa/assets
 
 echo ">> Migraciones de base de datos (idempotentes)"
 if docker ps --format '{{.Names}}' | grep -q '^postgres$'; then
-  for M in migration.sql migration-v5.sql migration-v6.sql migration-v7.sql migration-v8.sql migration-v9.sql migration-v10.sql migration-v11.sql migration-v12.sql migration-v13.sql; do
+  for M in migration.sql migration-v5.sql migration-v6.sql migration-v7.sql migration-v8.sql migration-v9.sql migration-v10.sql migration-v11.sql migration-v12.sql migration-v13.sql migration-v14.sql; do
     docker exec -i postgres psql -U postgres -d starkos < "$SRC/$M" >/dev/null 2>&1 \
       && echo "   $M aplicada" \
       || echo "   !! $M fallo (no bloqueante) - revisa a mano"
@@ -43,36 +43,35 @@ echo ">> Directorio de secretos"
 # Las variables de entorno quedan grabadas en el contenedor: un archivo se rota sin recrearlo
 mkdir -p /opt/backend/.secrets && chmod 700 /opt/backend/.secrets
 
-echo ">> nginx: rutas hacia el backend"
-# Cada bloque es idempotente: añade su ruta solo si falta
-if ! grep -q '|ia|auth)' "$NGINX_SITE"; then
-  sed -i 's#|strava|notion)#|strava|notion|ia|auth)#' "$NGINX_SITE"
+echo ">> ffmpeg (la tecnica en video, en vez de un GIF de 180px a tirones)"
+# La imagen es node:20-alpine y no lo trae. Sin ffmpeg la app NO se rompe: el
+# backend devuelve 404 en el .mp4 y el visor se cae al GIF, que de todos modos
+# ya sale a 360px y con la cadencia corregida. Con ffmpeg, ademas, MP4 720x720.
+if docker exec backend sh -c 'command -v ffmpeg' >/dev/null 2>&1; then
+  echo "   ya estaba instalado"
+else
+  docker exec backend sh -c 'apk add --no-cache ffmpeg >/dev/null 2>&1' \
+    && echo "   ffmpeg instalado" \
+    || echo "   !! no se pudo instalar ffmpeg - la tecnica seguira en GIF"
 fi
-# /resumen faltaba: el dashboard de HOY devolvia 404 de nginx en produccion
-if ! grep -q 'resumen' "$NGINX_SITE"; then
-  sed -i 's#|ia|auth)#|ia|auth|resumen)#' "$NGINX_SITE"
+# Los caches viejos guardan dentro los tiempos malos y la resolucion de 180px:
+# se tiran enteros. El backend usa .cache/ejercicios-v3 y los vuelve a pedir.
+rm -rf /opt/backend/.cache/ejercicios /opt/backend/.cache/ejercicios-v2
+
+echo ">> nginx: se copia el del repo (antes se parcheaba a ciegas con sed)"
+# Los siete sed encadenados que habia aqui buscaban cada uno lo que habia
+# insertado el anterior: en cuanto uno no casaba, los siguientes fallaban en
+# silencio y la ruta nueva se quedaba fuera sin que nadie se enterara hasta
+# ver un 404 raro en el movil. Ahora el archivo del repo ES el del servidor.
+cp "$SRC/nginx.conf" "$NGINX_SITE"
+if nginx -t 2>/dev/null; then
+  systemctl reload nginx
+  echo "   nginx recargado"
+else
+  echo "   !! nginx.conf invalido - se restaura el anterior y NO se recarga"
+  cp "$NGINX_SITE.bak" "$NGINX_SITE"
+  nginx -t && echo "   restaurado correctamente"
 fi
-# /push: suscripciones y disparo de la mision diaria
-if ! grep -q 'cruce' "$NGINX_SITE"; then
-  sed -i 's#|ia|auth|resumen)#|ia|auth|resumen|push|cruce|party)#' "$NGINX_SITE"
-fi
-# /medidas: composicion corporal, la que mide "volver a mi mejor version"
-if ! grep -q 'medidas' "$NGINX_SITE"; then
-  sed -i 's#|push|cruce|party)#|push|cruce|party|medidas)#' "$NGINX_SITE"
-fi
-# /tareas: los hitos, con los que se miden los trabajos que no tienen cifra
-if ! grep -q 'tareas)' "$NGINX_SITE"; then
-  sed -i 's#|medidas)#|medidas|tareas)#' "$NGINX_SITE"
-fi
-# /mision: la mision diaria, con sus objetivos de todos los ambitos
-if ! grep -q 'mision)' "$NGINX_SITE"; then
-  sed -i 's#|tareas)#|tareas|mision)#' "$NGINX_SITE"
-fi
-# /progreso: XP, nivel, rango y racha, que antes vivian en localStorage
-if ! grep -q 'progreso)' "$NGINX_SITE"; then
-  sed -i 's#|mision)#|mision|progreso)#' "$NGINX_SITE"
-fi
-nginx -t && systemctl reload nginx
 
 echo ">> Dependencias del backend (web-push para la mision diaria)"
 # node_modules vive en /opt/backend (montado en /app), asi que persiste entre reinicios

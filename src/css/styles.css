@@ -510,9 +510,10 @@ button, .nb, .streak-day, .stl, .ct, #hdr, #nav, .rc {
   position:        fixed;
   inset:           0;
   /* El horizonte de marca: aura violeta asomando por el tercio inferior.
-     assets/lock-bg.png encima si existe; el degradado es el fallback. */
+     assets/lock-bg.webp encima si existe; el degradado es el fallback.
+     En WebP son 10 KB en vez de 625: es la primera pantalla que se ve. */
   background:
-    url('/assets/lock-bg.png') center bottom / cover no-repeat,
+    url('/assets/lock-bg.webp') center bottom / cover no-repeat,
     linear-gradient(to top, rgba(139, 77, 255, 0.22), transparent 45%),
     var(--bg-base);
   z-index:         300;

@@ -15,6 +15,13 @@ const hoyISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
 
+/* "2026-08-01" → "1 AGO". Para decir de qué día es un dato prestado. */
+const diaCorto = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso + 'T12:00:00');
+  return isNaN(d) ? '' : d.toLocaleDateString('es', { day: 'numeric', month: 'short' }).toUpperCase();
+};
+
 /* ── ICONOS DE MARCA (SVG en línea, sin emojis) ─────────────────────
    Trazos finos en currentColor: heredan el color del contexto y se ven
    nítidos a cualquier tamaño, cosa que un emoji o un PNG no hacen. */
@@ -32,7 +39,8 @@ const OKICON = {
   circle:   _ok('<circle cx="12" cy="12" r="7"/>'),
   alert:    _ok('<path d="M12 7v6M12 17h.01"/><circle cx="12" cy="12" r="9"/>'),
   gear:     _ok('<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.6 7.5l1.7 1M17.7 15.5l1.7 1M4.6 16.5l1.7-1M17.7 8.5l1.7-1"/>'),
-  idioma:   _ok('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/>')
+  idioma:   _ok('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/>'),
+  play:     _ok('<circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5Z"/>')
 };
 
 /* ── 2. API ─────────────────────────────────────────────────────── */
@@ -289,7 +297,9 @@ async function loadResumenDia(fecha) {
     renderChecklist(d);
     renderStreakInfo();
     /* Solo se ofrece el registro rápido si el dato es de hoy y aún no existe.
-       sueno_fuente !== 'manual' cubre el caso del fallback al último día registrado. */
+       El servidor marca como 'heredado' el sueño que viene de otro día, así
+       que ya no se confunde con uno propio: antes ese préstamo escondía el
+       botón y te dejaba sin poder registrar el sueño de verdad. */
     renderSuenoQuick(fecha !== hoyISO() || (d.sueno_horas > 0 && d.sueno_fuente === 'manual'));
 
     if (notaEl) notaEl.value = d.nota || '';
@@ -353,12 +363,16 @@ function renderChecklist(d) {
   const nutriClass = nutriDone ? 'done' : 'warning';
   const pctNutri   = Math.min(100, Math.round(nutriRatio * 100));
 
-  /* Sueño */
-  const sueno      = d.sueno_horas || 0;
-  const suenoClass = sueno >= 7 ? 'done' : sueno >= 5 ? 'warning' : 'danger';
-  const suenoIcon  = sueno >= 7 ? OKICON.check : sueno >= 5 ? OKICON.alert : OKICON.cross;
-  const suenoSub   = sueno > 0
-    ? `${sueno}h${d.sueno_fuente !== 'strava' && d.fecha !== hoyISO() ? ' · último registrado' : ''}`
+  /* Sueño. Un dato heredado de otro día se dice que lo es y no cuenta como
+     bueno: antes se pintaba en verde como si hubieras dormido eso anoche. */
+  const sueno       = d.sueno_horas || 0;
+  const suenoViejo  = d.sueno_fuente === 'heredado';
+  const suenoClass  = suenoViejo ? 'warning'
+                    : sueno >= 7 ? 'done' : sueno >= 5 ? 'warning' : 'danger';
+  const suenoIcon   = suenoViejo ? OKICON.alert
+                    : sueno >= 7 ? OKICON.check : sueno >= 5 ? OKICON.alert : OKICON.cross;
+  const suenoSub    = sueno > 0
+    ? `${sueno}h${suenoViejo ? ` · del ${diaCorto(d.sueno_fecha)}, no de hoy` : ''}`
     : 'Sin datos';
 
   /* Proyectos */

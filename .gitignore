@@ -2,3 +2,8 @@ node_modules/
 .env
 .DS_Store
 *.log
+
+# El repo es público: aquí viven la clave de acceso y las VAPID
+.secrets/
+# Medias del catálogo de ejercicios, se rellena solo bajo demanda
+.cache/

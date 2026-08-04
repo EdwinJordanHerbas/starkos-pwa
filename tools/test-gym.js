@@ -106,8 +106,42 @@ const comprobar = (nombre, cond, extra = '') => {
   await ctx.verTecnica(1);
   await new Promise(r => setTimeout(r, 30));
   const visor = nodo('tecnica-body').innerHTML;
-  comprobar('GIF a tamaño grande', visor.includes('ejercicios/media/0025-EIeI8Vf.gif'));
+  // La técnica se enseña en vídeo: el GIF de origen son 180 px y dos de sus
+  // tres segundos son fotogramas congelados. El MP4 va al triple y sin saltos.
+  comprobar('la técnica se ve en vídeo', /<video[^>]+ejercicios\/media\/0025-EIeI8Vf\.mp4/.test(visor));
+  comprobar('el vídeo arranca solo y en bucle',
+    /autoplay/.test(visor) && /loop/.test(visor) && /muted/.test(visor) && /playsinline/.test(visor));
+  comprobar('sin vídeo se cae al GIF', visor.includes('0025-EIeI8Vf.gif'));
   comprobar('conserva su nombre', visor.includes('Press banca plano'));
+  comprobar('sin clip mapeado no hay botón de vídeo', !visor.includes('tec-cambiar'));
+
+  // Con un ejercicio que SÍ tiene vídeo de persona real mapeado
+  enContexto(`gymEj = [{ id: 2, nombre: 'Press banca plano', dataset_id: '0025',
+                         video_slug: 'male/barbell-bench-press', video_aprox: false }];`);
+  await ctx.verTecnica(2);
+  await new Promise(r => setTimeout(r, 30));
+  const conVideo = nodo('tecnica-body').innerHTML;
+  comprobar('con clip aparece el botón', conVideo.includes('VER EN VÍDEO'));
+  comprobar('pero se abre por la animación',
+    conVideo.includes('0025-EIeI8Vf.mp4') && !conVideo.includes('barbell-bench-press.mp4'));
+  ctx.alternarVistaTecnica();
+  const trasPulsar = nodo('tec-medio').innerHTML;
+  comprobar('al pulsar sale el vídeo real',
+    trasPulsar.includes('ejercicios/video/male/barbell-bench-press.mp4'));
+  comprobar('el vídeo trae su póster',
+    trasPulsar.includes('ejercicios/video/male/barbell-bench-press.jpg'));
+  ctx.alternarVistaTecnica();
+  comprobar('y se puede volver a la animación',
+    nodo('tec-medio').innerHTML.includes('0025-EIeI8Vf.mp4'));
+
+  // Una variante aproximada tiene que decirlo
+  enContexto(`gymEj = [{ id: 3, nombre: 'Hip thrust', dataset_id: '0025',
+                         video_slug: 'female/hip-raise-bridge', video_aprox: true }];`);
+  await ctx.verTecnica(3);
+  await new Promise(r => setTimeout(r, 30));
+  ctx.alternarVistaTecnica();
+  comprobar('avisa cuando el clip es una variante parecida',
+    /variante filmada más parecida/.test(nodo('tec-medio').innerHTML));
   const pasos = nodo('tec-pasos').innerHTML;
   comprobar('pasos en español', /acuést|banco|barra/i.test(pasos),
     (pasos.match(/<li>([^<]{0,60})/) || [])[1]);
