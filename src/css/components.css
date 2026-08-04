@@ -856,10 +856,10 @@ label {
 .hoy-check-card.done .hoy-card-icon svg { color: var(--success); }
 .gym-obj-icon svg { width: 20px; height: 20px; display: block; color: var(--brand); }
 .tech-gif-err svg { width: 30px; height: 30px; display: inline-block; color: var(--text-3); }
-.tech-placeholder-img { width: 96px; height: 96px; border-radius: 12px; opacity: 0.9; margin: 0 auto; display: block; }
+
 
 /* Iconos SVG en glifos de estado y borrado */
 .hoy-card-status svg { width: 18px; height: 18px; display: inline-block; vertical-align: middle; }
 .set-chk svg        { width: 14px; height: 14px; display: block; }
 .meal-del svg       { width: 15px; height: 15px; display: block; }
-.tech-placeholder-icon svg { width: 56px; height: 56px; margin: 0 auto; color: var(--text-3); }
+

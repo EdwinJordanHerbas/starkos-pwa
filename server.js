@@ -1272,8 +1272,11 @@ app.delete('/rutinas/:id', async (req, res) => {
       'SELECT COUNT(*)::int AS n FROM sesiones_gym WHERE rutina_id=$1', [req.params.id]
     );
     if (ses[0].n > 0) {
+      const n = ses[0].n;
       return res.status(409).json({
-        error: `Esa rutina tiene ${ses[0].n} sesión${ses[0].n === 1 ? '' : 'es'} registrada${ses[0].n === 1 ? '' : 's'}. Bórrala solo si quieres perder ese historial.`
+        error: n === 1
+          ? 'Esa rutina tiene una sesión registrada. Bórrala solo si quieres perder ese historial.'
+          : `Esa rutina tiene ${n} sesiones registradas. Bórrala solo si quieres perder ese historial.`
       });
     }
     await db('DELETE FROM rutinas WHERE id=$1', [req.params.id]);
