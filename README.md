@@ -100,7 +100,7 @@ mock.js             datos falsos para dev (solo se descarga con ?mock=1)
 nginx.conf          EL nginx del servidor, no una propuesta — lo despliega deploy.sh
 src/js/             app · projects · gym · nutrition · ia
 src/css/            styles · components · sections · animations (Liquid Glass)
-tools/              comprobaciones a mano: test-gym · test-codificacion · css-sin-uso
+tools/              comprobaciones a mano: test-gym · test-rutas · test-codificacion · css-sin-uso
 ```
 
 ## La técnica de los ejercicios

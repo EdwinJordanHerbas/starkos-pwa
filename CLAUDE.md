@@ -20,6 +20,7 @@ No hay build, así que `node --check` es lo único que avisa de un error de sint
 
 - `node tools/test-gym.js` — ejecuta el `gym.js` real contra un DOM falso
 - `node tools/test-codificacion.js` — que ningún archivo se guarde con las tildes rotas
+- `node tools/test-rutas.js` — arranca el servidor CON clave y comprueba qué es público
 - `node tools/css-sin-uso.js` — lista clases CSS candidatas a sobrar (no borra nada)
 
 ## Tres cosas que no son obvias

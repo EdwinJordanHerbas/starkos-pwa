@@ -93,11 +93,14 @@ const PUBLIC_PATHS = [
   /^\/health$/,
   /^\/strava\/(webhook|callback|auth)$/,  // Strava llama sin cabeceras propias
   /^\/push\/tick$/,                       // lo dispara el cron del host, ver nota abajo
-  /^\/ejercicios\/media\//                // GIFs de técnica: un <img> no manda cabeceras
+  /^\/ejercicios\/(media|video)\//         // técnica: ni un <img> ni un <video> mandan cabeceras
 ];
-// Por qué /ejercicios/media es público: sirve las animaciones de un dataset
-// público de ejercicios, las mismas para todo el mundo. No lee ni escribe nada
-// del usuario. Tiene que serlo porque un <img src> no puede mandar el Bearer.
+// Por qué /ejercicios/media y /ejercicios/video son públicos: sirven las
+// animaciones y los clips de catálogos públicos de ejercicios, los mismos para
+// todo el mundo. No leen ni escriben nada del usuario. Tienen que serlo porque
+// ni un <img src> ni un <video src> pueden mandar el Bearer — /video se quedó
+// fuera de esta lista al añadirlo y en producción devolvía 401: el visor
+// enseñaba el botón «ver en vídeo» y al pulsarlo no cargaba nada.
 // Por qué /push/tick es público: no lee ni escribe datos del usuario y no expone nada.
 // Como mucho manda un aviso a TUS propios dispositivos suscritos, una sola vez al día
 // (tabla push_enviados) y solo si la hora coincide con la que configuraste. Alternativa
