@@ -3,7 +3,7 @@
 //  Â· EstÃ¡ticos (css/js/iconos/fuentes): cache-first con actualizaciÃ³n en segundo plano
 //  Â· NavegaciÃ³n (index.html): network-first con fallback a cachÃ© (offline)
 //  Â· API (/logs, /rutinas, ...): siempre red â€” nunca cachear datos
-const VERSION = 'okiro-v6.13.0';
+const VERSION = 'okiro-v7.0.0';
 const STATIC_CACHE = `${VERSION}-static`;
 
 const PRECACHE = [
@@ -21,13 +21,20 @@ const PRECACHE = [
   '/src/js/ia.js',
   '/mock.js',
   '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  '/icons/icon-512.png',
+  '/assets/ejercicios.json'    // catálogo de técnica: se quiere disponible en el gimnasio
 ];
 
 // Rutas de API â€” nunca pasan por cachÃ©
 const API_PREFIXES = ['/logs', '/proyectos', '/rutinas', '/ejercicios', '/sesiones',
                       '/nutricion', '/strava', '/notion', '/ia', '/auth', '/health',
                       '/resumen', '/push', '/cruce', '/party', '/tareas', '/medidas', '/mision', '/progreso'];   // /resumen faltaba: se cacheaba el dashboard de HOY como si fuera estatico
+
+// ...salvo las animaciones de tecnica, que cuelgan de /ejercicios pero son
+// imagenes fijas. Su nombre lleva dentro el id del media, asi que un archivo
+// nunca cambia de contenido: cachearlas es lo que hace que la tecnica se vea
+// al instante en el gimnasio, donde la cobertura es mala.
+const MEDIA_PREFIX = '/ejercicios/media/';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -87,6 +94,20 @@ self.addEventListener('fetch', (event) => {
 
   // Solo GET; el resto (POST/PUT/DELETE) va directo a red
   if (event.request.method !== 'GET') return;
+
+  // Medias de tecnica â†’ cache-first de verdad: si ya esta, ni se pregunta
+  if (url.origin === location.origin && url.pathname.startsWith(MEDIA_PREFIX)) {
+    event.respondWith(
+      caches.match(event.request).then(cached => cached || fetch(event.request).then(res => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(STATIC_CACHE).then(c => c.put(event.request, copy));
+        }
+        return res;
+      }))
+    );
+    return;
+  }
 
   // API â†’ siempre red (los datos nunca se sirven de cachÃ©)
   if (url.origin === location.origin &&

@@ -1,4 +1,17 @@
-// OkiroSport — Lógica de Gym y Entrenamientos (v2 Enhanced)
+// OKIRO — Gym: sesiones, técnica y rutinas propias
+//
+// La técnica se veía mal por dos motivos que venían del principio:
+// la app pedía el GIF a data/gifs/{id}.gif, una carpeta que NO existe en el
+// repo del dataset (la buena es videos/{id}-{media_id}.gif), y emparejaba
+// cada ejercicio con el catálogo por su nombre en español contra una lista
+// de 20 traducciones a mano — así que ningún ejercicio nuevo tenía técnica y
+// varias de esas traducciones apuntaban a nombres inexistentes. Resultado:
+// el GIF no salió nunca, siempre caía al icono de repuesto.
+//
+// Ahora el vínculo es `dataset_id`, guardado en la base, y el catálogo va
+// precocinado en assets/ (nombres ya en español, 234 KB en vez de 17 MB).
+// La técnica se ve de un toque: miniatura en la tarjeta, visor con la
+// animación y los pasos en español al pulsarla.
 
 /* ── ESTADO ─────────────────────────────────────────────────────── */
 let gymRutinas        = [];
@@ -7,109 +20,81 @@ let gymEj             = [];
 let gymSeriesMap      = {};
 let gymOpenForm       = null;
 let gymHistoryVisible = false;
-const gymTechLoaded   = {};   // ejId → true si ya se cargó la técnica
+let gymEditando       = null;   // id de la rutina en edición, o null
 
 /* ══════════════════════════════════════════════════════════════════
-   DATASET DE EJERCICIOS (hasaneyldrm/exercises-dataset)
+   CATÁLOGO DE EJERCICIOS
    ══════════════════════════════════════════════════════════════════ */
-const GYM_GIF_BASE = 'https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/gifs/';
-const GYM_JSON_URL = 'https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/exercises.json';
+const GYM_MEDIA = 'ejercicios/media/';   // el backend lo sirve y lo cachea
 
-/** Mapeo: nombre español (lowercase) → término de búsqueda en inglés */
-const GYM_ES_EN = {
-  'press banca plano':          'barbell bench press',
-  'press inclinado mancuerna':  'incline dumbbell press',
-  'fondos en paralelas':        'chest dip',
-  'press militar barra':        'barbell overhead press',
-  'elevaciones laterales':      'dumbbell lateral raise',
-  'extensión tríceps polea':    'cable triceps pushdown',
-  'extension triceps polea':    'cable triceps pushdown',
-  'dominadas':                  'pull-up',
-  'remo con barra':             'barbell bent over row',
-  'remo en polea baja':         'seated cable row',
-  'face pulls':                 'cable face pull',
-  'curl bíceps barra':          'barbell curl',
-  'curl biceps barra':          'barbell curl',
-  'curl martillo':              'dumbbell hammer curl',
-  'sentadilla libre':           'barbell squat',
-  'prensa de piernas':          'leg press',
-  'zancadas mancuernas':        'dumbbell lunge',
-  'curl femoral':               'lying leg curl',
-  'hip thrust':                 'barbell hip thrust',
-  'gemelos en máquina':         'calf press',
-  'gemelos en maquina':         'calf press',
-};
+let _cat = null, _catIdx = null, _catProm = null;
+let _tec = null, _tecProm = null;
 
-let _gymDs        = null;   // { name_lower → exercise }
-let _gymDsPromise = null;
-
-/** Carga el dataset una sola vez y construye el índice por nombre. */
-async function loadGymDataset() {
-  if (_gymDs)        return _gymDs;
-  if (_gymDsPromise) return _gymDsPromise;
-
-  _gymDsPromise = fetch(GYM_JSON_URL)
+/** Índice de 1.324 ejercicios con nombre en español. ~234 KB, una sola vez. */
+function cargarCatalogo() {
+  if (_catIdx) return Promise.resolve(_catIdx);
+  if (_catProm) return _catProm;
+  _catProm = fetch('assets/ejercicios.json')
     .then(r => (r.ok ? r.json() : []))
     .then(arr => {
-      _gymDs = {};
-      arr.forEach(ex => { _gymDs[ex.name.toLowerCase()] = ex; });
-      return _gymDs;
+      _cat = arr;
+      _catIdx = new Map(arr.map(e => [e.id, e]));
+      return _catIdx;
     })
-    .catch(() => { _gymDs = {}; return _gymDs; });
-
-  return _gymDsPromise;
+    .catch(() => { _cat = []; _catIdx = new Map(); return _catIdx; });
+  return _catProm;
 }
 
-/** Busca un ejercicio en el dataset por nombre español. */
-function findDatasetEx(nombreES) {
-  if (!_gymDs) return null;
-  const en = GYM_ES_EN[nombreES.toLowerCase()];
-  if (!en) return null;
+/** Pasos en español. Pesa más, así que se pide solo al abrir el visor. */
+function cargarTecnica() {
+  if (_tec) return Promise.resolve(_tec);
+  if (_tecProm) return _tecProm;
+  _tecProm = fetch('assets/ejercicios-tecnica.json')
+    .then(r => (r.ok ? r.json() : {}))
+    .then(o => { _tec = o; return _tec; })
+    .catch(() => { _tec = {}; return _tec; });
+  return _tecProm;
+}
 
-  // Coincidencia exacta
-  if (_gymDs[en]) return _gymDs[en];
+const gifDe  = c => c ? `${GYM_MEDIA}${c.id}-${c.m}.gif` : '';
+const miniDe = c => c ? `${GYM_MEDIA}${c.id}-${c.m}.jpg` : '';
 
-  // Coincidencia parcial
-  const enL = en.toLowerCase();
-  for (const [k, v] of Object.entries(_gymDs)) {
-    if (k.includes(enL) || enL.includes(k)) return v;
+function gesc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/** Normaliza para comparar: sin acentos, sin signos, en minúsculas. */
+function norm(s) {
+  return String(s || '').toLowerCase()
+    .normalize('NFD').replace(/\p{Diacritic}/gu, '')   // fuera acentos
+    .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Sugerencia de catálogo para un ejercicio que aún no tiene dataset_id. */
+function sugerirDelCatalogo(nombre) {
+  if (!_cat || !_cat.length) return null;
+  const pal = norm(nombre).split(' ').filter(p => p.length > 2);
+  if (!pal.length) return null;
+  let mejor = null, mejorPunt = 0;
+  for (const c of _cat) {
+    const texto = norm(c.n) + ' ' + norm(c.en);
+    let punt = 0;
+    for (const p of pal) if (texto.includes(p)) punt++;
+    // Empate: gana el nombre más corto, que suele ser el ejercicio base
+    if (punt > mejorPunt || (punt === mejorPunt && punt > 0 && mejor && c.n.length < mejor.n.length)) {
+      mejor = c; mejorPunt = punt;
+    }
   }
-  return null;
-}
-
-/** Extrae músculo objetivo — admite distintos nombres de campo. */
-function dsTarget(ex) {
-  return ex.target_muscle || ex.target || ex.body_part || ex.category || '';
-}
-
-/** Extrae músculos secundarios como array. */
-function dsSecondary(ex) {
-  const s = ex.secondary_muscles || ex.secondaryMuscles || ex.secondary || [];
-  return Array.isArray(s) ? s : [];
-}
-
-/** Extrae pasos de instrucciones (array de strings). */
-function dsSteps(ex) {
-  const st = ex.instruction_steps?.en || ex.instructions_steps?.en;
-  if (Array.isArray(st) && st.length) return st;
-  const instr = ex.instructions;
-  if (Array.isArray(instr)) return instr;
-  if (instr && typeof instr === 'object' && instr.en) return [instr.en];
-  return [];
-}
-
-/** Callback de error en img del GIF. */
-function gymGifError(img, nombre) {
-  if (img.parentElement) {
-    img.parentElement.innerHTML =
-      `<div class="tech-gif-err">${OKICON.dumbbell}<br><small>${nombre}</small></div>`;
-  }
+  return mejorPunt >= Math.min(2, pal.length) ? mejor : null;
 }
 
 /* ══════════════════════════════════════════════════════════════════
    1. CARGAR
    ══════════════════════════════════════════════════════════════════ */
 async function loadGym() {
+  cargarCatalogo();   // en paralelo: para cuando se pinten las tarjetas ya está
+
   try {
     const [rutiRes, sesRes] = await Promise.all([
       api('/rutinas'),
@@ -140,6 +125,7 @@ async function loadGym() {
     gymSesion  = null;
   }
 
+  await cargarCatalogo();
   renderGym();
 }
 
@@ -147,6 +133,10 @@ async function loadGym() {
    2. RENDER PRINCIPAL
    ══════════════════════════════════════════════════════════════════ */
 function renderGym() {
+  if (gymEditando !== null) {
+    renderEditorRutina();
+    return;
+  }
   if (gymSesion && gymSesion.completada === true) {
     renderSesionDone();
   } else if (gymSesion) {
@@ -180,7 +170,9 @@ function renderRutinaSelect() {
   if (!gc) return;
 
   if (!gymRutinas.length) {
-    gc.innerHTML = '<div class="empty-state">No hay rutinas configuradas.<br>Ejecuta la migración de la base de datos.</div>';
+    gc.innerHTML = `
+      <div class="empty-state">Todavía no hay ninguna rutina.</div>
+      <button class="bs" style="margin-top:12px" onclick="nuevaRutina()">+ CREAR RUTINA</button>`;
     return;
   }
 
@@ -192,11 +184,16 @@ function renderRutinaSelect() {
       const img = GYM_BANNERS[(r.nombre || '').toUpperCase()];
       const bg  = img ? ` style="background:linear-gradient(90deg, rgba(10,6,18,.97) 32%, rgba(10,6,18,.55)), url('${img}') right center / cover no-repeat"` : '';
       return `
-      <div class="rc"${bg} onclick="iniciarSesion(${r.id})">
-        <div class="rn">${r.nombre || ''}</div>
-        <div class="rd">${r.descripcion || ''}</div>
+      <div class="rc"${bg}>
+        <div class="rc-main" onclick="iniciarSesion(${r.id})">
+          <div class="rn">${gesc(r.nombre || '')}</div>
+          <div class="rd">${gesc(r.descripcion || '')}</div>
+        </div>
+        <button class="rc-edit" onclick="editarRutina(${r.id})" title="Editar rutina"
+                aria-label="Editar ${gesc(r.nombre || '')}">${OKICON.gear}</button>
       </div>`;
-    }).join('');
+    }).join('') +
+    `<button class="bu gym-nueva-rutina" onclick="nuevaRutina()">+ NUEVA RUTINA</button>`;
 
   renderGymObjectives();
 }
@@ -236,7 +233,7 @@ async function renderGymObjectives() {
           <div class="gym-obj-header">
             <span class="gym-obj-icon">${icon}</span>
             <div class="gym-obj-info">
-              <div class="gym-obj-name">${r.nombre}</div>
+              <div class="gym-obj-name">${gesc(r.nombre)}</div>
               <div class="gym-obj-goal">${done} / ${monthlyGoal} sesiones</div>
             </div>
             <div class="gym-obj-pct">${pct}%</div>
@@ -283,11 +280,9 @@ async function iniciarSesion(rutina_id) {
 
     gymSeriesMap = {};
     gymOpenForm  = null;
+    await cargarCatalogo();
     renderGym();
     toast('Sesión iniciada.');
-
-    /* Pre-cargar dataset en background */
-    loadGymDataset();
   } catch {
     toast('Error al iniciar sesión', 'error');
   }
@@ -305,24 +300,26 @@ function renderSesionActiva() {
     || 'SESIÓN ACTIVA';
 
   const header = `
-    <div class="stl">${rutinaNombre}</div>
+    <div class="stl">${gesc(rutinaNombre)}</div>
     <div style="display:flex;gap:8px;margin-bottom:16px">
       <button class="bs" style="flex:1" onclick="completarSesion()">COMPLETAR SESIÓN</button>
       <button class="rb" style="flex:0 0 auto;padding:0 14px;height:48px;cursor:pointer;font-family:var(--font-sans);font-size:11px" onclick="cancelarSesion()">CANCELAR</button>
     </div>`;
 
-  const cards = gymEj.map(e => renderEjercicioCard(e)).join('');
+  const cards = gymEj.length
+    ? gymEj.map(e => renderEjercicioCard(e)).join('')
+    : `<div class="empty-state">Esta rutina no tiene ejercicios.<br>
+         <button class="bu" style="margin-top:10px" onclick="editarRutina(${gymSesion.rutina_id})">AÑADIR EJERCICIOS</button>
+       </div>`;
   gc.innerHTML = header + cards;
-
-  /* Pre-cargar dataset silently para tener GIFs listos */
-  loadGymDataset();
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   6. CARD DE EJERCICIO
+   6. CARD DE EJERCICIO — con la técnica a la vista
    ══════════════════════════════════════════════════════════════════ */
 function renderEjercicioCard(e) {
   const series = gymSeriesMap[e.id] || [];
+  const cat    = e.dataset_id && _catIdx ? _catIdx.get(e.dataset_id) : null;
 
   const filas = series.map((s, i) => `
     <div class="set-row${s.completada ? ' completed' : ''}">
@@ -333,16 +330,46 @@ function renderEjercicioCard(e) {
     </div>`
   ).join('');
 
+  /* La referencia que se olvida delante del banco: con cuánto te quedaste.
+     Postgres devuelve los NUMERIC como texto ("60.00"), así que hay que
+     pasarlos por Number o la tarjeta diría "60.00 kg". */
+  const kg  = v => Number(v).toLocaleString('es-ES', { maximumFractionDigits: 1 });
+  const ult = e.ultima;
+  const refHTML = ult && ult.peso != null
+    ? `<div class="ej-ultima">última vez · <strong>${kg(ult.peso)} kg × ${ult.reps}</strong>${
+        e.mejor_peso && Number(e.mejor_peso) > Number(ult.peso)
+          ? ` <span class="ej-record">récord ${kg(e.mejor_peso)} kg</span>` : ''}</div>`
+    : '<div class="ej-ultima ej-ultima-vacia">primera vez con este ejercicio</div>';
+
+  /* Miniatura: es el acceso a la técnica. Si no hay vínculo con el catálogo,
+     el hueco invita a elegirlo en vez de quedarse en un icono muerto. */
+  const previewHTML = cat
+    ? `<button class="ej-prev" onclick="verTecnica(${e.id})" aria-label="Ver técnica de ${gesc(e.nombre)}">
+         <img src="${miniDe(cat)}" alt="" loading="lazy" onerror="this.classList.add('err')">
+         <span class="ej-prev-play">▶</span>
+       </button>`
+    : `<button class="ej-prev ej-prev-vacio" onclick="elegirEjercicioCatalogo(${e.id})"
+               aria-label="Enlazar ${gesc(e.nombre)} con el catálogo">
+         ${OKICON.dumbbell}<span class="ej-prev-lbl">técnica</span>
+       </button>`;
+
+  const musculos = cat
+    ? `<div class="ej-musc">
+         <span class="muscle-badge primary">${gesc(cat.t)}</span>
+         ${cat.s.slice(0, 2).map(m => `<span class="muscle-badge secondary">${gesc(m)}</span>`).join('')}
+       </div>`
+    : '';
+
   return `
     <div class="ec" id="ec-${e.id}">
-      <div class="en">${e.nombre || ''}</div>
-      <div class="er2">${e.series || '?'}×${e.reps_objetivo || '?'}</div>
-
-      <!-- ── SECCIÓN TÉCNICA ────────────────────────────────── -->
-      <div class="ej-technique">
-        <button class="tech-toggle-btn" id="tech-btn-${e.id}"
-                onclick="toggleTechnique(${e.id})">▶ VER TÉCNICA</button>
-        <div class="tech-detail" id="tech-detail-${e.id}" style="display:none"></div>
+      <div class="ej-head">
+        ${previewHTML}
+        <div class="ej-info">
+          <div class="en">${gesc(e.nombre || '')}</div>
+          <div class="er2">${e.series || '?'}×${e.reps_objetivo || '?'}</div>
+          ${refHTML}
+          ${musculos}
+        </div>
       </div>
 
       <div class="sets-list">${filas}</div>
@@ -353,9 +380,9 @@ function renderEjercicioCard(e) {
 
       <div class="add-set-form" id="form-${e.id}" style="display:none">
         <div class="lbl">PESO KG</div>
-        <input type="number" id="peso-${e.id}" placeholder="Peso kg" min="0" step="0.5" inputmode="decimal">
+        <input type="number" id="peso-${e.id}" placeholder="${ult?.peso != null ? kg(ult.peso) : 'Peso kg'}" min="0" step="0.5" inputmode="decimal">
         <div class="lbl" style="margin-top:6px">REPS</div>
-        <input type="number" id="reps-${e.id}" placeholder="Reps" min="0" step="1" inputmode="numeric">
+        <input type="number" id="reps-${e.id}" placeholder="${ult?.reps ?? 'Reps'}" min="0" step="1" inputmode="numeric">
         <button class="save-set-btn" style="margin-top:8px;width:100%"
                 onclick="guardarSerie(${e.id})">GUARDAR</button>
       </div>
@@ -363,95 +390,71 @@ function renderEjercicioCard(e) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   7. TÉCNICA: TOGGLE
+   7. VISOR DE TÉCNICA — animación y pasos en español
    ══════════════════════════════════════════════════════════════════ */
-function toggleTechnique(ejId) {
-  const detail = document.getElementById(`tech-detail-${ejId}`);
-  const btn    = document.getElementById(`tech-btn-${ejId}`);
-  if (!detail) return;
-
-  const wasOpen = detail.style.display !== 'none';
-  detail.style.display = wasOpen ? 'none' : 'block';
-
-  if (btn) {
-    btn.textContent = wasOpen ? '▶ VER TÉCNICA' : '▼ OCULTAR TÉCNICA';
-    btn.classList.toggle('open', !wasOpen);
-  }
-
-  /* Cargar contenido la primera vez que se abre */
-  if (!wasOpen && !gymTechLoaded[ejId]) {
-    gymTechLoaded[ejId] = true;
-    const ej = gymEj.find(e => e.id === ejId);
-    if (ej) injectTechniqueContent(ejId, ej.nombre);
-  }
+async function verTecnica(ejId) {
+  const ej  = gymEj.find(e => e.id === ejId);
+  if (!ej) return;
+  await cargarCatalogo();
+  const cat = ej.dataset_id ? _catIdx.get(ej.dataset_id) : null;
+  if (!cat) return elegirEjercicioCatalogo(ejId);
+  abrirVisorTecnica(cat, ej.nombre);
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   8. TÉCNICA: INYECTAR CONTENIDO
-   ══════════════════════════════════════════════════════════════════ */
-async function injectTechniqueContent(ejId, nombreES) {
-  const detail = document.getElementById(`tech-detail-${ejId}`);
-  if (!detail) return;
+/** Abre el visor para una ficha del catálogo. `titulo` es el nombre propio. */
+async function abrirVisorTecnica(cat, titulo) {
+  const ov   = document.getElementById('tecnica-overlay');
+  const body = document.getElementById('tecnica-body');
+  if (!ov || !body) return;
 
-  detail.innerHTML = '<div class="tech-loading">Buscando ejercicio…</div>';
+  ov.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
 
-  await loadGymDataset();
-  const ex = findDatasetEx(nombreES);
-
-  if (!ex) {
-    detail.innerHTML = `
-      <div class="tech-placeholder">
-        <div class="tech-placeholder-icon">${OKICON.dumbbell}</div>
-        <div class="tech-placeholder-text">${nombreES}</div>
-      </div>`;
-    return;
-  }
-
-  const target    = dsTarget(ex);
-  const secondary = dsSecondary(ex);
-  const steps     = dsSteps(ex);
-
-  const badgesHTML = [
-    target ? `<span class="muscle-badge primary">${target}</span>` : '',
-    ...secondary.slice(0, 4).map(m => `<span class="muscle-badge secondary">${m}</span>`)
-  ].join('');
-
-  const instrHTML = steps.length
-    ? `<button class="tech-instr-btn" id="tech-instr-btn-${ejId}"
-               onclick="toggleTechInstr(${ejId})">VER INSTRUCCIONES</button>
-       <ol class="tech-instructions" id="tech-instr-${ejId}" style="display:none">
-         ${steps.map(s => `<li>${s}</li>`).join('')}
-       </ol>`
-    : '';
-
-  const escapedNombre = nombreES.replace(/'/g, "\\'");
-
-  detail.innerHTML = `
-    <div class="tech-gif-wrap">
-      <img class="tech-gif"
-           src="${GYM_GIF_BASE}${ex.id}.gif"
-           alt="${nombreES}"
-           loading="lazy"
-           onerror="gymGifError(this, '${escapedNombre}')">
+  body.innerHTML = `
+    <div class="tec-cab">
+      <div>
+        <h3 class="tec-titulo">${gesc(titulo || cat.n)}</h3>
+        <p class="tec-sub">${gesc(cat.n)}${cat.eq ? ' · ' + gesc(cat.eq) : ''}</p>
+      </div>
+      <button class="tec-cerrar" onclick="cerrarVisorTecnica()" aria-label="Cerrar">${OKICON.cross}</button>
     </div>
-    ${badgesHTML ? `<div class="tech-muscles">${badgesHTML}</div>` : ''}
-    ${instrHTML}`;
+    <div class="tec-gif-wrap">
+      <img class="tec-gif" src="${gifDe(cat)}" alt="Animación de ${gesc(cat.n)}"
+           onerror="gifNoCarga(this)">
+    </div>
+    <div class="tech-muscles">
+      <span class="muscle-badge primary">${gesc(cat.t)}</span>
+      ${cat.s.map(m => `<span class="muscle-badge secondary">${gesc(m)}</span>`).join('')}
+    </div>
+    <div class="tec-pasos" id="tec-pasos"><div class="tech-loading">Cargando la técnica…</div></div>`;
+
+  const tec   = await cargarTecnica();
+  const pasos = tec[cat.id] || [];
+  const cont  = document.getElementById('tec-pasos');
+  if (!cont) return;   // se cerró mientras cargaba
+
+  cont.innerHTML = pasos.length
+    ? `<div class="tec-pasos-tit">CÓMO SE HACE</div>
+       <ol class="tech-instructions">${pasos.map(p => `<li>${gesc(p)}</li>`).join('')}</ol>`
+    : '<div class="tech-loading">Este ejercicio no trae instrucciones.</div>';
+}
+
+/** El GIF viene del catálogo por la red: si falla, se dice, no se deja el hueco. */
+function gifNoCarga(img) {
+  if (img.parentElement) {
+    img.parentElement.innerHTML =
+      '<div class="tech-gif-err">No se pudo cargar la animación.<br>Vuelve a intentarlo con conexión.</div>';
+  }
+}
+
+function cerrarVisorTecnica() {
+  const ov = document.getElementById('tecnica-overlay');
+  if (ov) ov.style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   9. TÉCNICA: TOGGLE INSTRUCCIONES
-   ══════════════════════════════════════════════════════════════════ */
-function toggleTechInstr(ejId) {
-  const el  = document.getElementById(`tech-instr-${ejId}`);
-  const btn = document.getElementById(`tech-instr-btn-${ejId}`);
-  if (!el) return;
-  const open = el.style.display !== 'none';
-  el.style.display = open ? 'none' : 'block';
-  if (btn) btn.textContent = open ? 'VER INSTRUCCIONES' : 'OCULTAR INSTRUCCIONES';
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   10. TOGGLE FORMULARIO DE SERIE
+   8. TOGGLE FORMULARIO DE SERIE
    ══════════════════════════════════════════════════════════════════ */
 function toggleForm(ejId) {
   if (gymOpenForm !== null && gymOpenForm !== ejId) {
@@ -473,14 +476,20 @@ function toggleForm(ejId) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   11. GUARDAR SERIE
+   9. GUARDAR SERIE
    ══════════════════════════════════════════════════════════════════ */
 async function guardarSerie(ejId) {
   const pesoEl = document.getElementById(`peso-${ejId}`);
   const repsEl = document.getElementById(`reps-${ejId}`);
+  const ej     = gymEj.find(e => e.id === ejId);
 
-  const peso = parseFloat(pesoEl?.value);
-  const reps = parseInt(repsEl?.value);
+  // Dejarlo en blanco repite lo de la última vez, que es lo que se hace
+  // casi siempre: el placeholder ya enseña qué valor se va a guardar.
+  const conDefecto = (valor, porDefecto) =>
+    String(valor ?? '').trim() === '' ? Number(porDefecto) : Number(valor);
+
+  const peso = conDefecto(pesoEl?.value, ej?.ultima?.peso);
+  const reps = conDefecto(repsEl?.value, ej?.ultima?.reps);
 
   if (!peso || peso <= 0 || !reps || reps <= 0) {
     toast('Introduce peso y repeticiones', 'error');
@@ -505,7 +514,7 @@ async function guardarSerie(ejId) {
     if (repsEl) repsEl.value = '';
     gymOpenForm = null;
 
-    /* Actualizar solo la lista de series (preserva la sección de técnica abierta) */
+    /* Actualizar solo la lista de series (preserva la técnica y el scroll) */
     const card = document.getElementById(`ec-${ejId}`);
     if (card) {
       const setsEl = card.querySelector('.sets-list');
@@ -530,7 +539,7 @@ async function guardarSerie(ejId) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   12. COMPLETAR SESIÓN
+   10. COMPLETAR / CANCELAR SESIÓN
    ══════════════════════════════════════════════════════════════════ */
 async function completarSesion() {
   if (!confirm('¿Completar sesión de hoy?')) return;
@@ -554,9 +563,6 @@ async function completarSesion() {
   }
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   13. CANCELAR SESIÓN
-   ══════════════════════════════════════════════════════════════════ */
 function cancelarSesion() {
   if (!confirm('¿Cancelar sesión? Los datos guardados se mantienen.')) return;
   gymSesion    = null;
@@ -567,7 +573,363 @@ function cancelarSesion() {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   14. RENDER SESIÓN COMPLETADA — DUNGEON CLEARED ENHANCED
+   11. EDITOR DE RUTINAS
+   Las rutinas y sus ejercicios venían sembrados por SQL: la app tenía
+   los endpoints pero ninguna pantalla, así que cambiar una serie
+   obligaba a entrar en la base de datos.
+   ══════════════════════════════════════════════════════════════════ */
+async function editarRutina(id) {
+  gymEditando = id;
+  await cargarCatalogo();
+  try {
+    const res = await api(`/rutinas/${id}/ejercicios`);
+    gymEj = res.ok ? await res.json() : [];
+  } catch { gymEj = []; }
+  renderGym();
+}
+
+function salirEditor() {
+  gymEditando = null;
+  loadGym();
+}
+
+const DIAS_SEMANA = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+
+function renderEditorRutina() {
+  const gc = document.getElementById('gym-content');
+  if (!gc) return;
+  const r = gymRutinas.find(x => x.id === gymEditando);
+  if (!r) { salirEditor(); return; }
+
+  const dias = Array.isArray(r.dias) ? r.dias.map(d => String(d).toLowerCase()) : [];
+
+  const filas = gymEj.map((e, i) => {
+    const cat = e.dataset_id && _catIdx ? _catIdx.get(e.dataset_id) : null;
+    return `
+    <div class="ed-ej" id="ed-ej-${e.id}">
+      <div class="ed-ej-orden">
+        <button onclick="moverEjercicio(${e.id}, -1)" ${i === 0 ? 'disabled' : ''} aria-label="Subir">▲</button>
+        <button onclick="moverEjercicio(${e.id}, 1)" ${i === gymEj.length - 1 ? 'disabled' : ''} aria-label="Bajar">▼</button>
+      </div>
+      ${cat
+        ? `<img class="ed-ej-mini" src="${miniDe(cat)}" alt="" loading="lazy">`
+        : `<div class="ed-ej-mini ed-ej-mini-vacia">${OKICON.dumbbell}</div>`}
+      <div class="ed-ej-datos">
+        <input class="ed-ej-nombre" value="${gesc(e.nombre)}" id="ed-nom-${e.id}"
+               onchange="guardarEjercicio(${e.id})" aria-label="Nombre">
+        <div class="ed-ej-num">
+          <input type="number" id="ed-ser-${e.id}" value="${e.series || 3}" min="1" max="20"
+                 inputmode="numeric" onchange="guardarEjercicio(${e.id})" aria-label="Series">
+          <span>×</span>
+          <input type="text" id="ed-rep-${e.id}" value="${gesc(e.reps_objetivo || '8-12')}"
+                 onchange="guardarEjercicio(${e.id})" aria-label="Repeticiones">
+          <button class="ed-ej-tec" onclick="elegirEjercicioCatalogo(${e.id})">
+            ${cat ? 'CAMBIAR TÉCNICA' : 'SIN TÉCNICA · ELEGIR'}
+          </button>
+        </div>
+      </div>
+      <button class="ed-ej-del" onclick="borrarEjercicio(${e.id})" aria-label="Quitar">${OKICON.cross}</button>
+    </div>`;
+  }).join('');
+
+  gc.innerHTML = `
+    <div class="ed-cab">
+      <button class="ed-volver" onclick="salirEditor()">← VOLVER</button>
+      <button class="ed-borrar-rut" onclick="borrarRutina(${r.id})">BORRAR RUTINA</button>
+    </div>
+
+    <div class="card glass-strong ed-ficha">
+      <div class="form-field" style="margin-bottom:10px">
+        <label>Nombre de la rutina</label>
+        <input type="text" id="ed-rut-nombre" value="${gesc(r.nombre)}" onchange="guardarRutina()">
+      </div>
+      <div class="form-field" style="margin-bottom:10px">
+        <label>¿De qué va?</label>
+        <input type="text" id="ed-rut-desc" value="${gesc(r.descripcion || '')}"
+               placeholder="Pecho · Hombros · Tríceps" onchange="guardarRutina()">
+      </div>
+      <div class="form-field">
+        <label>Días <span class="lbl-hint">marcan qué toca hoy en la misión diaria</span></label>
+        <div class="ed-dias">
+          ${DIAS_SEMANA.map(d => `
+            <button class="ed-dia${dias.includes(d) ? ' on' : ''}" data-dia="${d}"
+                    onclick="toggleDia(this)">${d.slice(0, 1).toUpperCase()}${d.slice(1, 3)}</button>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="stl" style="margin:18px 0 10px">EJERCICIOS</div>
+    ${filas || '<div class="empty-state">Esta rutina aún no tiene ejercicios.</div>'}
+    <button class="bs" style="margin-top:12px" onclick="abrirBuscador()">+ AÑADIR EJERCICIO</button>`;
+}
+
+function toggleDia(btn) {
+  btn.classList.toggle('on');
+  guardarRutina();
+}
+
+async function guardarRutina() {
+  const r = gymRutinas.find(x => x.id === gymEditando);
+  if (!r) return;
+  const nombre = document.getElementById('ed-rut-nombre')?.value.trim();
+  const desc   = document.getElementById('ed-rut-desc')?.value.trim();
+  const dias   = [...document.querySelectorAll('.ed-dia.on')].map(b => b.dataset.dia);
+  if (!nombre) { toast('La rutina necesita nombre', 'error'); return; }
+
+  try {
+    const res = await api(`/rutinas/${r.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre, descripcion: desc, dias })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error guardando');
+    }
+    Object.assign(r, await res.json());
+    toast('Rutina guardada');
+  } catch (e) {
+    toast(e.message || 'No se pudo guardar', 'error');
+  }
+}
+
+async function nuevaRutina() {
+  const nombre = prompt('Nombre de la rutina (PUSH, PIERNA, CARDIO…):');
+  if (!nombre || !nombre.trim()) return;
+  try {
+    const res = await api('/rutinas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre: nombre.trim(), descripcion: '', dias: [] })
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+    const r = await res.json();
+    gymRutinas.push(r);
+    toast('Rutina creada');
+    editarRutina(r.id);
+  } catch (e) {
+    toast(e.message?.includes('duplicate') ? 'Ya existe una rutina con ese nombre' : 'No se pudo crear', 'error');
+  }
+}
+
+async function borrarRutina(id) {
+  const r = gymRutinas.find(x => x.id === id);
+  if (!confirm(`¿Borrar la rutina ${r?.nombre || ''} y sus ejercicios?`)) return;
+  try {
+    const res = await api(`/rutinas/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'No se pudo borrar');
+    }
+    gymRutinas = gymRutinas.filter(x => x.id !== id);
+    toast('Rutina borrada');
+    salirEditor();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function guardarEjercicio(id) {
+  const nombre = document.getElementById(`ed-nom-${id}`)?.value.trim();
+  const series = document.getElementById(`ed-ser-${id}`)?.value;
+  const reps   = document.getElementById(`ed-rep-${id}`)?.value.trim();
+  if (!nombre) { toast('El ejercicio necesita nombre', 'error'); return; }
+
+  try {
+    const res = await api(`/ejercicios/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre, series, reps_objetivo: reps })
+    });
+    if (!res.ok) throw new Error('Error');
+    const act = await res.json();
+    const i = gymEj.findIndex(e => e.id === id);
+    if (i >= 0) gymEj[i] = { ...gymEj[i], ...act };
+    toast('Guardado');
+  } catch {
+    toast('No se pudo guardar', 'error');
+  }
+}
+
+async function borrarEjercicio(id) {
+  const e = gymEj.find(x => x.id === id);
+  if (!confirm(`¿Quitar ${e?.nombre || 'el ejercicio'} de la rutina?`)) return;
+  try {
+    const res = await api(`/ejercicios/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Error');
+    const r = await res.json();
+    gymEj = gymEj.filter(x => x.id !== id);
+    renderGym();
+    toast(r.archivado
+      ? `Quitado. Sus ${r.series} series siguen contando en el historial.`
+      : 'Ejercicio quitado');
+  } catch {
+    toast('No se pudo quitar', 'error');
+  }
+}
+
+async function moverEjercicio(id, delta) {
+  const i = gymEj.findIndex(e => e.id === id);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= gymEj.length) return;
+  [gymEj[i], gymEj[j]] = [gymEj[j], gymEj[i]];
+  renderGym();
+  try {
+    await api(`/rutinas/${gymEditando}/orden`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: gymEj.map(e => e.id) })
+    });
+  } catch {
+    toast('El orden no se guardó', 'error');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   12. BUSCADOR DEL CATÁLOGO
+   1.324 ejercicios con nombre en español, animación y músculos.
+   ══════════════════════════════════════════════════════════════════ */
+let _buscadorDestino = null;   // {modo:'añadir'|'vincular', ejId?}
+
+async function abrirBuscador() {
+  _buscadorDestino = { modo: 'anadir' };
+  await mostrarBuscador('Añadir ejercicio a la rutina');
+}
+
+async function elegirEjercicioCatalogo(ejId) {
+  _buscadorDestino = { modo: 'vincular', ejId };
+  const ej = gymEj.find(e => e.id === ejId);
+  await mostrarBuscador('Elegir la técnica', ej?.nombre || '');
+}
+
+async function mostrarBuscador(titulo, textoInicial = '') {
+  const ov   = document.getElementById('buscador-overlay');
+  const body = document.getElementById('buscador-body');
+  if (!ov || !body) return;
+
+  ov.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  body.innerHTML = `
+    <div class="tec-cab">
+      <h3 class="tec-titulo">${gesc(titulo)}</h3>
+      <button class="tec-cerrar" onclick="cerrarBuscador()" aria-label="Cerrar">${OKICON.cross}</button>
+    </div>
+    <input type="search" id="busc-input" class="busc-input" placeholder="press banca, dominada, sentadilla…"
+           autocomplete="off" oninput="buscarEjercicios(this.value)">
+    <div class="busc-res" id="busc-res"></div>`;
+
+  await cargarCatalogo();
+  const input = document.getElementById('busc-input');
+  if (input) {
+    input.value = textoInicial;
+    setTimeout(() => input.focus(), 80);
+  }
+  buscarEjercicios(textoInicial);
+}
+
+function cerrarBuscador() {
+  const ov = document.getElementById('buscador-overlay');
+  if (ov) ov.style.display = 'none';
+  document.body.style.overflow = '';
+  _buscadorDestino = null;
+}
+
+function buscarEjercicios(q) {
+  const cont = document.getElementById('busc-res');
+  if (!cont || !_cat) return;
+
+  const term = norm(q);
+  let lista;
+  if (!term) {
+    // Sin escribir nada: los básicos. Por orden del catálogo salían cosas
+    // como "3/4 abdominal" o "air bike", que no es por donde empieza nadie.
+    lista = _cat.filter(c => c.b);
+  } else {
+    const pal = term.split(' ').filter(Boolean);
+    lista = _cat
+      .map(c => {
+        const es = norm(c.n), en = norm(c.en), alias = c.k ? norm(c.k) : '';
+        let punt = 0;
+        for (const p of pal) {
+          if (es.startsWith(p)) punt += 4;
+          else if (es.includes(p)) punt += 3;
+          else if (alias.includes(p)) punt += 3;   // "face pull", "hip thrust"…
+          else if (en.includes(p)) punt += 2;
+          else return null;          // toda palabra tiene que aparecer
+        }
+        if (c.b) punt += 1.5;                      // a igualdad, gana el básico
+        return { c, punt: punt - c.n.length * 0.01 };   // y luego el nombre más corto
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.punt - a.punt)
+      .slice(0, 60)
+      .map(x => x.c);
+  }
+
+  if (!lista.length) {
+    cont.innerHTML = '<div class="empty-state">Ningún ejercicio con ese nombre.</div>';
+    return;
+  }
+
+  cont.innerHTML = lista.map(c => `
+    <div class="busc-item">
+      <img class="busc-mini" src="${miniDe(c)}" alt="" loading="lazy">
+      <div class="busc-datos" onclick="verTecnicaCatalogo('${c.id}')">
+        <div class="busc-nom">${gesc(c.n)}</div>
+        <div class="busc-meta">${gesc(c.t)}${c.eq ? ' · ' + gesc(c.eq) : ''}</div>
+      </div>
+      <button class="busc-add" onclick="elegirDelCatalogo('${c.id}')">${
+        _buscadorDestino?.modo === 'vincular' ? 'ELEGIR' : '+'
+      }</button>
+    </div>`).join('');
+}
+
+function verTecnicaCatalogo(id) {
+  const c = _catIdx?.get(id);
+  if (c) abrirVisorTecnica(c, c.n);
+}
+
+async function elegirDelCatalogo(datasetId) {
+  const c = _catIdx?.get(datasetId);
+  if (!c || !_buscadorDestino) return;
+
+  try {
+    if (_buscadorDestino.modo === 'vincular') {
+      const res = await api(`/ejercicios/${_buscadorDestino.ejId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataset_id: datasetId })
+      });
+      if (!res.ok) throw new Error('Error');
+      const act = await res.json();
+      const i = gymEj.findIndex(e => e.id === _buscadorDestino.ejId);
+      if (i >= 0) gymEj[i] = { ...gymEj[i], ...act };
+      toast('Técnica enlazada');
+    } else {
+      const res = await api('/ejercicios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rutina_id: gymEditando,
+          nombre: c.n,
+          series: 3,
+          reps_objetivo: '8-12',
+          dataset_id: datasetId
+        })
+      });
+      if (!res.ok) throw new Error('Error');
+      gymEj.push(await res.json());
+      toast(`${c.n} añadido`);
+    }
+    cerrarBuscador();
+    renderGym();
+  } catch {
+    toast('No se pudo guardar', 'error');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   13. RENDER SESIÓN COMPLETADA — DUNGEON CLEARED
    ══════════════════════════════════════════════════════════════════ */
 function renderSesionDone() {
   const gc = document.getElementById('gym-content');
@@ -612,7 +974,7 @@ function renderSesionDone() {
       : '';
     return `
       <div class="done-ej-card">
-        <div class="done-ej-name">${e.nombre}</div>
+        <div class="done-ej-name">${gesc(e.nombre)}</div>
         <div class="done-ej-sets">${pills}</div>
         ${volStr}
       </div>`;
@@ -633,7 +995,7 @@ function renderSesionDone() {
                 <div class="done-bar-track">
                   <div class="done-bar-fill" style="height:0%" data-h="${h}%"></div>
                 </div>
-                <div class="done-bar-label">${label}</div>
+                <div class="done-bar-label">${gesc(label)}</div>
               </div>`;
           }).join('')}
         </div>
@@ -643,7 +1005,7 @@ function renderSesionDone() {
   gc.innerHTML = `
     <div class="gym-done-card">
       <div class="dungeon-cleared">DUNGEON CLEARED</div>
-      <p class="done-sub">${rutinaNombre ? rutinaNombre + ' · ' : ''}${fecha}</p>
+      <p class="done-sub">${gesc(rutinaNombre ? rutinaNombre + ' · ' : '')}${fecha}</p>
       <div class="done-stats-row">
         <div class="done-stat">
           <div class="done-stat-val">${totalSeries}</div>
@@ -678,7 +1040,7 @@ function renderSesionDone() {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   15. HISTORIAL GYM
+   14. HISTORIAL GYM
    ══════════════════════════════════════════════════════════════════ */
 function toggleGymHistory() {
   gymHistoryVisible = !gymHistoryVisible;
@@ -725,15 +1087,15 @@ async function loadGymHistory() {
         });
         detailHTML = Object.values(byEj).map(ej => `
           <div class="gh-exercise">
-            <span class="gh-ej-name">${ej.nombre}</span>
-            <span class="gh-ej-sets">${ej.sets.join(' · ')}</span>
+            <span class="gh-ej-name">${gesc(ej.nombre)}</span>
+            <span class="gh-ej-sets">${gesc(ej.sets.join(' · '))}</span>
           </div>`).join('');
       }
 
       return `<div class="gh-item" onclick="this.querySelector('.gh-detail').classList.toggle('open')">
   <div class="gh-row">
     <span class="gh-date">${fecha}</span>
-    <span class="gh-rutina">${rutinaNombre}</span>
+    <span class="gh-rutina">${gesc(rutinaNombre)}</span>
     <span class="gh-series">${totalSeries} SERIES</span>
   </div>
   <div class="gh-detail">${detailHTML || '<span style="color:var(--text-4);font-size:11px">Sin detalle disponible</span>'}</div>
@@ -746,7 +1108,7 @@ async function loadGymHistory() {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   8. COMPOSICIÓN CORPORAL
+   15. COMPOSICIÓN CORPORAL
    ══════════════════════════════════════════════════════════════════
    Entrenar no es progresar. Hasta aquí OKIRO sabía si habías ido al
    gimnasio, pero no si estabas recuperando la masa que perdiste, que es

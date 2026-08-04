@@ -74,6 +74,45 @@
     <button class="mm-btn-skip">RECHAZAR</button>
   </div>
 </div>
+<!-- Visor de técnica: la animación del ejercicio y los pasos en español.
+     Antes había que abrir dos acordeones para llegar a un GIF que nunca
+     cargaba (la ruta del dataset era otra); ahora es un toque en la miniatura. -->
+<div id="tecnica-overlay" style="display:none" onclick="if(event.target===this)cerrarVisorTecnica()">
+  <div class="hoja" id="tecnica-body"></div>
+</div>
+
+<!-- Buscador del catálogo: 1.324 ejercicios con nombre en español -->
+<div id="buscador-overlay" style="display:none" onclick="if(event.target===this)cerrarBuscador()">
+  <div class="hoja" id="buscador-body"></div>
+</div>
+
+<!-- Objetivos de macros: viven en el servidor, no en este móvil -->
+<div id="macros-overlay" style="display:none" onclick="if(event.target===this)cerrarMacros()">
+  <div class="hoja hoja-corta">
+    <div class="tec-cab">
+      <div>
+        <h3 class="tec-titulo">Objetivos de macros</h3>
+        <p class="tec-sub">Los usan la app, el resumen del día y el coach IA</p>
+      </div>
+      <button class="tec-cerrar" onclick="cerrarMacros()" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><label>Calorías (kcal)</label>
+        <input type="number" id="mo-kcal" min="1" max="20000" inputmode="numeric"></div>
+      <div class="form-field"><label>Proteínas (g)</label>
+        <input type="number" id="mo-prot" min="0" max="2000" inputmode="numeric"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><label>Carbos (g)</label>
+        <input type="number" id="mo-carb" min="0" max="2000" inputmode="numeric"></div>
+      <div class="form-field"><label>Grasas (g)</label>
+        <input type="number" id="mo-fat" min="0" max="2000" inputmode="numeric"></div>
+    </div>
+    <div class="mo-calc" id="mo-calc"></div>
+    <button class="bs" style="margin-top:12px" onclick="guardarMacros()">GUARDAR OBJETIVOS</button>
+  </div>
+</div>
+
 <div id="vignette"></div>
 <div id="particles">
   <span></span><span></span><span></span><span></span>

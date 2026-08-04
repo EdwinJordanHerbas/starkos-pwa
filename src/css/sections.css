@@ -2177,3 +2177,332 @@ a.hoy-check-card:hover {
   color:       var(--brand-soft);
   margin-top:  5px;
 }
+
+/* ════════════════════════════════════════════════════════════════ */
+/* GYM v13 — LA TÉCNICA SE VE, Y LAS RUTINAS SE EDITAN              */
+/* ════════════════════════════════════════════════════════════════ */
+
+/* ── Tarjeta de rutina: se puede entrar o editar ─────────────── */
+.rc { display: flex; align-items: center; gap: 10px; }
+.rc-main { flex: 1; min-width: 0; }
+
+.rc-edit {
+  flex: 0 0 auto;
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.04);
+  border: none; border-radius: var(--radius-pill);
+  color: var(--text-3); cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+.rc-edit:hover { color: var(--brand); background: rgba(139,77,255,0.12); }
+.rc-edit svg { width: 17px; height: 17px; }
+
+.gym-nueva-rutina {
+  width: 100%; height: 42px; margin-top: 4px;
+  font-size: 11px; letter-spacing: 1.5px;
+}
+
+/* ── Cabecera del ejercicio: miniatura + datos ───────────────── */
+.ej-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
+.ej-info { flex: 1; min-width: 0; }
+
+/* La miniatura ES el acceso a la técnica: 72px, tocable de sobra */
+.ej-prev {
+  position: relative;
+  flex: 0 0 auto;
+  width: 72px; height: 72px;
+  padding: 0; border: none;
+  border-radius: var(--radius-sm);
+  overflow: hidden; cursor: pointer;
+  background: rgba(0,0,0,0.35);
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.10);
+  transition: box-shadow var(--transition);
+}
+.ej-prev:hover, .ej-prev:active { box-shadow: inset 0 0 0 1px var(--brand); }
+.ej-prev img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ej-prev img.err { display: none; }
+
+.ej-prev-play {
+  position: absolute; right: 4px; bottom: 4px;
+  width: 18px; height: 18px;
+  display: grid; place-items: center;
+  background: rgba(10,6,18,0.82);
+  border-radius: var(--radius-pill);
+  color: var(--brand);
+  font-size: 8px; line-height: 1;
+  padding-left: 1px;
+}
+
+.ej-prev-vacio {
+  display: grid; place-items: center; gap: 2px;
+  color: var(--text-4);
+  background: rgba(255,255,255,0.02);
+}
+.ej-prev-vacio svg { width: 22px; height: 22px; }
+.ej-prev-lbl { font-family: var(--font-sans); font-size: 8px; letter-spacing: 0.5px; }
+
+/* Con cuánto peso te quedaste la última vez */
+.ej-ultima {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--text-3);
+  margin-top: 5px;
+}
+.ej-ultima strong { color: var(--text-2); font-weight: 600; }
+.ej-ultima-vacia { color: var(--text-4); }
+
+.ej-record {
+  color: var(--warning);
+  margin-left: 4px;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+.ej-musc { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+
+/* ── Hoja deslizante: visor de técnica, buscador y macros ────── */
+#tecnica-overlay, #buscador-overlay, #macros-overlay {
+  position: fixed; inset: 0; z-index: 3000;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(6, 3, 12, 0.78);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+
+.hoja {
+  width: 100%; max-width: 560px;
+  max-height: 92vh; overflow-y: auto;
+  padding: 18px 16px calc(20px + env(safe-area-inset-bottom));
+  background: #120B1E;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.10), 0 -18px 50px rgba(0,0,0,0.55);
+  animation: subirHoja 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hoja-corta { max-height: none; }
+
+@keyframes subirHoja {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.tec-cab {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px;
+}
+
+.tec-titulo {
+  font-family: var(--font-sans);
+  font-size: 16px; font-weight: 600;
+  color: var(--text-1); margin: 0;
+  line-height: 1.3;
+}
+
+.tec-sub {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text-3);
+  margin: 3px 0 0; line-height: 1.4;
+}
+
+.tec-cerrar {
+  flex: 0 0 auto;
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.05);
+  border: none; border-radius: var(--radius-pill);
+  color: var(--text-3); cursor: pointer;
+  font-size: 14px; line-height: 1;
+}
+.tec-cerrar:hover { color: var(--text-1); }
+.tec-cerrar svg { width: 15px; height: 15px; }
+
+.tec-gif-wrap {
+  display: flex; align-items: center; justify-content: center;
+  background: #fff;                 /* los GIFs del catálogo van sobre blanco */
+  border-radius: var(--radius-md);
+  overflow: hidden; margin-bottom: 12px;
+  min-height: 180px;
+}
+.tec-gif { width: 100%; max-width: 320px; height: auto; display: block; }
+
+.tec-pasos { margin-top: 14px; }
+
+.tec-pasos-tit {
+  font-family: var(--font-sans);
+  font-size: 10px; letter-spacing: 1.5px;
+  color: var(--text-3); margin-bottom: 8px;
+}
+
+/* ── Buscador del catálogo ───────────────────────────────────── */
+.busc-input {
+  width: 100%; height: 44px;
+  padding: 0 14px; margin-bottom: 12px;
+  background: rgba(255,255,255,0.04);
+  border: none; border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-family: var(--font-sans); font-size: 15px;
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.10);
+}
+.busc-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--brand); }
+
+.busc-res { display: flex; flex-direction: column; gap: 6px; }
+
+.busc-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px;
+  background: rgba(255,255,255,0.02);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.05);
+}
+
+.busc-mini {
+  flex: 0 0 auto;
+  width: 46px; height: 46px;
+  object-fit: cover; border-radius: 10px;
+  background: rgba(0,0,0,0.3);
+}
+
+.busc-datos { flex: 1; min-width: 0; cursor: pointer; }
+
+.busc-nom {
+  font-family: var(--font-sans); font-size: 13px;
+  color: var(--text-2); line-height: 1.3;
+}
+
+.busc-meta {
+  font-family: var(--font-sans); font-size: 10px;
+  color: var(--text-4); margin-top: 2px;
+}
+
+.busc-add {
+  flex: 0 0 auto;
+  min-width: 34px; height: 34px;
+  padding: 0 10px;
+  background: rgba(139,77,255,0.14);
+  border: none; border-radius: var(--radius-pill);
+  color: var(--brand); cursor: pointer;
+  font-family: var(--font-sans); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.busc-add:hover { background: rgba(139,77,255,0.26); }
+
+/* ── Editor de rutinas ───────────────────────────────────────── */
+.ed-cab {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px;
+}
+
+.ed-volver, .ed-borrar-rut {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--font-sans); font-size: 10px; letter-spacing: 1.5px;
+  padding: 6px 0;
+}
+.ed-volver { color: var(--text-3); }
+.ed-volver:hover { color: var(--text-1); }
+.ed-borrar-rut { color: var(--text-4); }
+.ed-borrar-rut:hover { color: var(--danger); }
+
+.ed-ficha { margin-bottom: 4px; }
+
+.ed-dias { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.ed-dia {
+  flex: 1 1 auto; min-width: 40px; height: 32px;
+  background: rgba(255,255,255,0.04);
+  border: none; border-radius: var(--radius-sm);
+  color: var(--text-4); cursor: pointer;
+  font-family: var(--font-sans); font-size: 10px; letter-spacing: 0.5px;
+  transition: color var(--transition), background var(--transition);
+}
+.ed-dia.on {
+  background: rgba(139,77,255,0.16); color: var(--brand);
+  box-shadow: inset 0 0 0 0.5px rgba(139,77,255,0.45);
+}
+
+.ed-ej {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px; margin-bottom: 6px;
+  background: rgba(255,255,255,0.02);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.06);
+}
+
+.ed-ej-orden { display: flex; flex-direction: column; gap: 2px; }
+
+.ed-ej-orden button {
+  width: 22px; height: 20px;
+  background: rgba(255,255,255,0.04);
+  border: none; border-radius: 6px;
+  color: var(--text-3); cursor: pointer;
+  font-size: 8px; line-height: 1;
+}
+.ed-ej-orden button:disabled { opacity: 0.25; cursor: default; }
+.ed-ej-orden button:not(:disabled):hover { color: var(--brand); }
+
+.ed-ej-mini {
+  flex: 0 0 auto;
+  width: 42px; height: 42px;
+  object-fit: cover; border-radius: 9px;
+  background: rgba(0,0,0,0.3);
+}
+.ed-ej-mini-vacia { display: grid; place-items: center; color: var(--text-4); }
+.ed-ej-mini-vacia svg { width: 18px; height: 18px; }
+
+.ed-ej-datos { flex: 1; min-width: 0; }
+
+.ed-ej-nombre {
+  width: 100%; height: 26px;
+  padding: 0 6px;
+  background: transparent; border: none;
+  color: var(--text-2);
+  font-family: var(--font-sans); font-size: 13px;
+  border-radius: 6px;
+}
+.ed-ej-nombre:focus { outline: none; background: rgba(255,255,255,0.05); }
+
+.ed-ej-num { display: flex; align-items: center; gap: 5px; margin-top: 3px; }
+
+.ed-ej-num input {
+  height: 24px; padding: 0 5px;
+  background: rgba(255,255,255,0.04); border: none;
+  border-radius: 6px; color: var(--text-3);
+  font-family: var(--font-sans); font-size: 11px;
+  text-align: center;
+}
+.ed-ej-num input:focus {
+  outline: none; color: var(--text-1);
+  box-shadow: inset 0 0 0 0.5px var(--brand);
+}
+#gym-content .ed-ej-num input[type="number"] { width: 40px; }
+#gym-content .ed-ej-num input[type="text"]   { width: 62px; }
+.ed-ej-num span { color: var(--text-4); font-size: 10px; }
+
+.ed-ej-tec {
+  margin-left: auto;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-4);
+  font-family: var(--font-sans); font-size: 9px; letter-spacing: 0.5px;
+  padding: 4px 6px; border-radius: 6px;
+  white-space: nowrap;
+}
+.ed-ej-tec:hover { color: var(--brand); background: rgba(139,77,255,0.10); }
+
+.ed-ej-del {
+  flex: 0 0 auto;
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  background: none; border: none;
+  color: var(--text-4); cursor: pointer;
+  border-radius: var(--radius-pill);
+}
+.ed-ej-del:hover { color: var(--danger); background: rgba(224,82,82,0.10); }
+.ed-ej-del svg { width: 13px; height: 13px; }
+
+/* ── Objetivos de macros ─────────────────────────────────────── */
+.mo-calc {
+  font-family: var(--font-sans); font-size: 10px;
+  color: var(--text-3); line-height: 1.6;
+  margin-top: 10px; padding-top: 10px;
+  box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.07);
+}
+.mo-calc strong { color: var(--text-2); }
+.mo-calc .mo-desvio { color: var(--warning); }

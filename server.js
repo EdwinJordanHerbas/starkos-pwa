@@ -70,8 +70,12 @@ app.use(express.json({ limit: '15mb' }));
 const PUBLIC_PATHS = [
   /^\/health$/,
   /^\/strava\/(webhook|callback|auth)$/,  // Strava llama sin cabeceras propias
-  /^\/push\/tick$/                        // lo dispara el cron del host, ver nota abajo
+  /^\/push\/tick$/,                       // lo dispara el cron del host, ver nota abajo
+  /^\/ejercicios\/media\//                // GIFs de técnica: un <img> no manda cabeceras
 ];
+// Por qué /ejercicios/media es público: sirve las animaciones de un dataset
+// público de ejercicios, las mismas para todo el mundo. No lee ni escribe nada
+// del usuario. Tiene que serlo porque un <img src> no puede mandar el Bearer.
 // Por qué /push/tick es público: no lee ni escribe datos del usuario y no expone nada.
 // Como mucho manda un aviso a TUS propios dispositivos suscritos, una sola vez al día
 // (tabla push_enviados) y solo si la hora coincide con la que configuraste. Alternativa
@@ -306,8 +310,10 @@ async function objetivosDelDia(fecha, recuperacion = false) {
     objetivos.push({ clave: 'entreno', texto: `Completar la rutina ${rutinaHoy.nombre}`, meta: 1 });
   }
 
-  // 2. Proteína — el objetivo diario de siempre
-  objetivos.push({ clave: 'proteina', texto: 'Llegar a 160 g de proteína', meta: 160 });
+  // 2. Proteína — la que él haya fijado como objetivo, no una cifra de ejemplo.
+  // La misión pedía 160 g fijos aunque en NUTRICIÓN tuviera puesto otro número.
+  const objProt = (await objetivosDe()).proteinas;
+  objetivos.push({ clave: 'proteina', texto: `Llegar a ${objProt} g de proteína`, meta: objProt });
 
   // 3. Descanso — registrar el sueño es lo que sostiene todo el cruce
   objetivos.push({ clave: 'sueno', texto: 'Registrar el sueño de la noche', meta: 1 });
@@ -1245,25 +1251,173 @@ app.post('/rutinas', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/rutinas/:id', async (req, res) => {
+  const { nombre, descripcion, dias } = req.body;
+  if (!nombre || !String(nombre).trim()) return res.status(400).json({ error: 'La rutina necesita nombre' });
+  try {
+    const { rows } = await db(
+      `UPDATE rutinas SET nombre=$2, descripcion=$3, dias=$4 WHERE id=$1 RETURNING *`,
+      [req.params.id, String(nombre).trim(), descripcion || '', JSON.stringify(dias || [])]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'No existe esa rutina' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Borrar una rutina no puede tirar el historial: sesiones_gym apunta a ella
+// sin ON DELETE, así que si tiene sesiones registradas se niega y lo explica.
+app.delete('/rutinas/:id', async (req, res) => {
+  try {
+    const { rows: ses } = await db(
+      'SELECT COUNT(*)::int AS n FROM sesiones_gym WHERE rutina_id=$1', [req.params.id]
+    );
+    if (ses[0].n > 0) {
+      return res.status(409).json({
+        error: `Esa rutina tiene ${ses[0].n} sesión${ses[0].n === 1 ? '' : 'es'} registrada${ses[0].n === 1 ? '' : 's'}. Bórrala solo si quieres perder ese historial.`
+      });
+    }
+    await db('DELETE FROM rutinas WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Los ejercicios de una rutina, con la referencia de la última vez.
+// Sin ese dato hay que acordarse de memoria de con cuánto peso te quedaste,
+// que es justo lo que se olvida delante del banco.
 app.get('/rutinas/:id/ejercicios', async (req, res) => {
   try {
     const { rows } = await db(
-      'SELECT * FROM ejercicios WHERE rutina_id=$1 ORDER BY orden',
-      [req.params.id]
+      `SELECT e.*,
+              (SELECT json_build_object('peso', sr.peso, 'reps', sr.reps, 'fecha', s.fecha)
+                 FROM series_realizadas sr
+                 JOIN sesiones_gym s ON s.id = sr.sesion_id
+                WHERE sr.ejercicio_id = e.id AND s.fecha < $2::date
+                ORDER BY s.fecha DESC, sr.peso DESC NULLS LAST
+                LIMIT 1) AS ultima,
+              (SELECT MAX(sr.peso) FROM series_realizadas sr
+                WHERE sr.ejercicio_id = e.id) AS mejor_peso
+         FROM ejercicios e
+        WHERE e.rutina_id=$1 AND e.activo
+        ORDER BY e.orden, e.id`,
+      [req.params.id, hoyStr()]
     );
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/ejercicios', async (req, res) => {
-  const { rutina_id, nombre, series, reps_objetivo, orden } = req.body;
+  const { rutina_id, nombre, series, reps_objetivo, orden, dataset_id } = req.body;
+  if (!rutina_id || !nombre || !String(nombre).trim()) {
+    return res.status(400).json({ error: 'Faltan la rutina o el nombre' });
+  }
   try {
+    // Si no viene orden, va al final de la rutina
+    const pos = orden != null ? orden : (await db(
+      'SELECT COALESCE(MAX(orden),0)+1 AS n FROM ejercicios WHERE rutina_id=$1', [rutina_id]
+    )).rows[0].n;
     const { rows } = await db(
-      'INSERT INTO ejercicios (rutina_id, nombre, series, reps_objetivo, orden) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [rutina_id, nombre, series, reps_objetivo, orden]
+      `INSERT INTO ejercicios (rutina_id, nombre, series, reps_objetivo, orden, dataset_id)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [rutina_id, String(nombre).trim(), series || 3, reps_objetivo || '8-12', pos, dataset_id || null]
     );
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/ejercicios/:id', async (req, res) => {
+  const { nombre, series, reps_objetivo, dataset_id } = req.body;
+  try {
+    // COALESCE: mandar solo el campo que cambia no debe borrar los demás
+    const { rows } = await db(
+      `UPDATE ejercicios
+          SET nombre        = COALESCE($2, nombre),
+              series        = COALESCE($3, series),
+              reps_objetivo = COALESCE($4, reps_objetivo),
+              dataset_id    = COALESCE($5, dataset_id)
+        WHERE id=$1 RETURNING *`,
+      [req.params.id,
+       nombre != null && String(nombre).trim() ? String(nombre).trim() : null,
+       series != null ? parseInt(series, 10) : null,
+       reps_objetivo != null ? String(reps_objetivo) : null,
+       dataset_id != null ? String(dataset_id) : null]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'No existe ese ejercicio' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Quitar un ejercicio con historial lo archiva en vez de borrarlo: lo que
+// levantaste sigue contando para el volumen aunque hoy cambies de rutina.
+app.delete('/ejercicios/:id', async (req, res) => {
+  try {
+    const { rows: s } = await db(
+      'SELECT COUNT(*)::int AS n FROM series_realizadas WHERE ejercicio_id=$1', [req.params.id]
+    );
+    if (s[0].n > 0) {
+      await db('UPDATE ejercicios SET activo=false WHERE id=$1', [req.params.id]);
+      return res.json({ ok: true, archivado: true, series: s[0].n });
+    }
+    await db('DELETE FROM ejercicios WHERE id=$1', [req.params.id]);
+    res.json({ ok: true, archivado: false });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Reordenar: llega la lista de ids en el orden nuevo
+app.put('/rutinas/:id/orden', async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : null;
+  if (!ids || !ids.length) return res.status(400).json({ error: 'Falta la lista de ids' });
+  const cliente = await pool.connect();
+  try {
+    await cliente.query('BEGIN');
+    for (let i = 0; i < ids.length; i++) {
+      await cliente.query(
+        'UPDATE ejercicios SET orden=$1 WHERE id=$2 AND rutina_id=$3',
+        [i + 1, ids[i], req.params.id]
+      );
+    }
+    await cliente.query('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    await cliente.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: e.message });
+  } finally { cliente.release(); }
+});
+
+// ── Medias del catálogo de ejercicios (GIF de técnica y miniatura) ──
+// Se sirven desde aquí y no directamente desde GitHub por tres razones:
+// la app funciona aunque el repo de origen mueva las rutas otra vez (ya pasó:
+// la app pedía data/gifs/{id}.gif, que no existe), el service worker puede
+// cachearlas por ser del mismo origen, y así hay una sola URL para los
+// ejercicios sembrados y para los que se añadan desde el catálogo.
+const MEDIA_BASE  = 'https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main';
+const MEDIA_CACHE = path.join(__dirname, '.cache', 'ejercicios');
+
+app.get('/ejercicios/media/:archivo', async (req, res) => {
+  const nombre = req.params.archivo;
+  // Nombre estricto ({id}-{media_id}.gif): sin esto, "../../" saldría del caché
+  if (!/^\d{4}-[A-Za-z0-9_-]{1,32}\.(gif|jpg)$/.test(nombre)) {
+    return res.status(400).json({ error: 'Nombre de archivo no válido' });
+  }
+  const esGif   = nombre.endsWith('.gif');
+  const destino = path.join(MEDIA_CACHE, nombre);
+  const tipo    = esGif ? 'image/gif' : 'image/jpeg';
+
+  // El nombre lleva dentro el id del media, así que un archivo nunca cambia
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+
+  try {
+    if (fs.existsSync(destino)) return res.type(tipo).send(fs.readFileSync(destino));
+
+    const r = await fetch(`${MEDIA_BASE}/${esGif ? 'videos' : 'images'}/${nombre}`);
+    if (!r.ok) return res.status(404).json({ error: 'No está en el catálogo' });
+    const buf = Buffer.from(await r.arrayBuffer());
+
+    fs.mkdirSync(MEDIA_CACHE, { recursive: true });
+    fs.writeFileSync(destino, buf);
+    res.type(tipo).send(buf);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
 });
 
 // Inicia o recupera sesión del día
@@ -1728,6 +1882,55 @@ app.get('/notion/sync', async (req, res) => {
 // ════════════════════════════════════════════════════════
 // NUTRICIÓN
 // ════════════════════════════════════════════════════════
+// ── OBJETIVOS DE MACROS ─────────────────────────────────────
+// Vivían en el localStorage del móvil: el servidor no los conocía, así que
+// el prompt de la IA y el resumen del día llevaban números escritos a mano
+// que no cambiaban al editarlos en la app. Ahora hay una sola fuente y todo
+// lee de aquí. Va colgado de /nutricion (y declarado ANTES de /nutricion/:fecha,
+// que si no se lo tragaría como si "objetivos" fuera una fecha) para no tener
+// que añadir otra ruta al nginx del droplet.
+const OBJETIVOS_DEFECTO = { calorias: 2400, proteinas: 180, carbos: 300, grasas: 70 };
+
+async function objetivosDe(usuarioId = 1) {
+  const { rows } = await db(
+    'SELECT calorias, proteinas, carbos, grasas FROM objetivos_nutricion WHERE usuario_id=$1',
+    [usuarioId]
+  ).catch(() => ({ rows: [] }));
+  return rows[0] || { ...OBJETIVOS_DEFECTO };
+}
+
+app.get('/nutricion/objetivos', async (req, res) => {
+  try { res.json(await objetivosDe()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/nutricion/objetivos', async (req, res) => {
+  const num = (v, min, max) => {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) && n >= min && n <= max ? n : null;
+  };
+  const o = {
+    calorias:  num(req.body?.calorias,  1, 20000),
+    proteinas: num(req.body?.proteinas, 0, 2000),
+    carbos:    num(req.body?.carbos,    0, 2000),
+    grasas:    num(req.body?.grasas,    0, 2000)
+  };
+  if (Object.values(o).some(v => v === null)) {
+    return res.status(400).json({ error: 'Objetivos fuera de rango o no numéricos' });
+  }
+  try {
+    const { rows } = await db(
+      `INSERT INTO objetivos_nutricion (usuario_id, calorias, proteinas, carbos, grasas)
+       VALUES (1,$1,$2,$3,$4)
+       ON CONFLICT (usuario_id) DO UPDATE
+         SET calorias=$1, proteinas=$2, carbos=$3, grasas=$4, actualizado=NOW()
+       RETURNING calorias, proteinas, carbos, grasas`,
+      [o.calorias, o.proteinas, o.carbos, o.grasas]
+    );
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/nutricion/:fecha', async (req, res) => {
   try {
     const { rows } = await db('SELECT * FROM comidas WHERE fecha=$1 ORDER BY created_at', [req.params.fecha]);
@@ -2055,9 +2258,10 @@ async function origenEntreno(fecha) {
 // ════════════════════════════════════════════════════════
 async function buildPromptDaily() {
   const fecha = hoyStr();
-  const [logsQ, comidasQ] = await Promise.all([
+  const [logsQ, comidasQ, obj] = await Promise.all([
     db('SELECT * FROM daily_logs ORDER BY fecha DESC LIMIT 30'),
-    db('SELECT * FROM comidas WHERE fecha=$1', [fecha])
+    db('SELECT * FROM comidas WHERE fecha=$1', [fecha]),
+    objetivosDe()
   ]);
   const logs = logsQ.rows;
   const logHoy = logs.find(l => l.fecha && l.fecha.toISOString?.().startsWith(fecha)) ||
@@ -2084,11 +2288,11 @@ LOG DE HOY:
 - Tareas: ${logHoy.tareas_completadas ?? '—'}/${logHoy.tareas_total ?? 5}
 - Notas: ${logHoy.notas || 'ninguna'}
 
-MACROS HOY:
-- Calorías: ${tot.calorias} / 2400 kcal objetivo
-- Proteínas: ${tot.proteinas}g / 180g objetivo
-- Carbos: ${tot.carbos}g / 300g objetivo
-- Grasas: ${tot.grasas}g / 70g objetivo
+MACROS HOY (objetivos fijados por el atleta, no genéricos):
+- Calorías: ${tot.calorias} / ${obj.calorias} kcal objetivo
+- Proteínas: ${tot.proteinas}g / ${obj.proteinas}g objetivo
+- Carbos: ${tot.carbos}g / ${obj.carbos}g objetivo
+- Grasas: ${tot.grasas}g / ${obj.grasas}g objetivo
 
 Da un análisis breve (máx 150 palabras) con:
 1. Estado del día en una línea
@@ -2186,8 +2390,12 @@ app.get('/resumen/:fecha', async (req, res) => {
     ).catch(() => ({ rows: [] }));
     const calorias_consumidas = Math.round(comidas.reduce((s, c) => s + (c.calorias || 0), 0));
     const proteinas_consumidas = Math.round(comidas.reduce((s, c) => s + parseFloat(c.proteinas || 0), 0));
-    const calorias_objetivo  = 2200;
-    const proteinas_objetivo = 160;
+    // Los objetivos salen de la tabla, no de números escritos aquí: esta pantalla
+    // decía 2200/160 mientras la de nutrición decía 2400/180, y ninguna de las dos
+    // hacía caso a lo que él hubiera editado en la app.
+    const objDia = await objetivosDe();
+    const calorias_objetivo  = objDia.calorias;
+    const proteinas_objetivo = objDia.proteinas;
 
     // ── 3. Sesión gym ────────────────────────────────────
     const { rows: sesRows } = await db(
