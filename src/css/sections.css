@@ -478,6 +478,20 @@ a.hoy-check-card:hover {
 .rc:hover,
 .rc:active { box-shadow: inset 0 0 0 0.5px var(--brand); }
 
+/* La que toca hoy según los días de la rutina */
+.rc-hoy { box-shadow: inset 0 0 0 1px var(--brand); }
+.rc-hoy .rn { color: var(--text-1); }
+.rc-hoy-tag {
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(139,77,255,0.18);
+  color: var(--brand);
+  font-family: var(--font-sans);
+  font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
+  vertical-align: 2px;
+}
+
 .rn {
   font-family:   var(--font-sans);
   font-size:     16px;
@@ -515,74 +529,183 @@ a.hoy-check-card:hover {
   margin-bottom: 10px;
 }
 
-/* Filas de serie */
-.set-row {
-  display:               grid;
-  grid-template-columns: 24px 1fr 1fr 32px;
-  gap:                   8px;
-  align-items:           center;
-  padding:               6px 0;
-  box-shadow:            inset 0 -0.5px 0 rgba(255,255,255,0.08);
+/* ── Series de un toque ──────────────────────────────────────────
+   La fila sale ya escrita: el check la da por hecha sin abrir nada y los
+   números abren el ajuste. Los dos blancos pasan de 44 px, que es el mínimo
+   para acertar con el pulgar de pie y con las manos sudadas. */
+.sp-fila {
+  display: grid;
+  grid-template-columns: 22px 1fr 48px;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  box-shadow: inset 0 -0.5px 0 rgba(255,255,255,0.06);
 }
 
-.set-num {
+.sp-num {
   font-family: var(--font-sans);
-  font-size:   11px;
-  color:       var(--text-4);
+  font-size: 11px;
+  color: var(--text-4);
 }
 
-.set-val {
+.sp-vals {
+  display: flex; align-items: baseline; gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+  background: none; border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
   font-family: var(--font-sans);
-  font-size:   13px;
-  color:       var(--text-2);
+  cursor: pointer; text-align: left;
+}
+.sp-vals:active { background: rgba(255,255,255,0.05); }
+.sp-peso  { font-size: 16px; font-weight: 600; }
+.sp-vacio { color: var(--text-4); font-weight: 400; }
+.sp-x     { font-size: 11px; color: var(--text-4); }
+.sp-reps  { font-size: 14px; color: var(--text-3); }
+
+.sp-chk {
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  padding: 0;
+  background: rgba(255,255,255,0.03);
+  border: none;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.10);
+  color: var(--text-4);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.sp-chk svg { width: 18px; height: 18px; }
+.sp-chk:active { transform: scale(0.94); }
+
+.sp-fila.done .sp-chk   { background: var(--success); color: #04150E; box-shadow: none; }
+.sp-fila.done .sp-peso  { color: var(--success); }
+.sp-fila.done .sp-reps  { color: var(--success); opacity: 0.75; }
+
+.sp-pie { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+/* Ajuste sin teclado: ± para el día que cambia el peso */
+.sp-edit {
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 0.5px rgba(139,77,255,0.35);
+}
+.sp-edit-tit {
+  font-family: var(--font-sans);
+  font-size: 9px; letter-spacing: 1.5px;
+  color: var(--brand);
+  margin-bottom: 8px;
+}
+.sp-paso {
+  display: grid;
+  grid-template-columns: 46px 1fr 34px 46px;
+  gap: 8px; align-items: center;
+  margin-bottom: 8px;
+}
+.sp-paso button {
+  height: 44px;
+  background: rgba(255,255,255,0.05);
+  border: none; border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: 20px; line-height: 1;
+  cursor: pointer;
+}
+.sp-paso button:active { background: rgba(139,77,255,0.25); }
+.sp-paso input {
+  height: 44px;
+  background: var(--surface-1);
+  border: none; border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.10);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  font-size: 18px; font-weight: 600;
+  text-align: center;
+  outline: none;
+}
+.sp-paso input:focus { box-shadow: inset 0 0 0 1px var(--brand); }
+/* Las flechitas del navegador estorban al lado de unos ± de 44 px */
+.sp-paso input::-webkit-outer-spin-button,
+.sp-paso input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sp-paso input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+.sp-un {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text-4);
+}
+.sp-ok {
+  width: 100%; height: 44px;
+  background: var(--brand);
+  border: none; border-radius: var(--radius-sm);
+  color: #000;
+  font-family: var(--font-sans);
+  font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
+  cursor: pointer;
 }
 
-.set-chk {
-  width:           20px;
-  height:          20px;
-  background:      var(--success);
-  display:         flex;
-  align-items:     center;
-  justify-content: center;
-  color:           #000;
-  font-size:       12px;
-  font-weight:     700;
-  flex-shrink:     0;
+/* Progreso de la sesión */
+.ses-prog { margin: 0 0 14px; }
+.ses-prog-txt {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text-3);
+  margin-bottom: 6px;
+}
+.ses-prog-txt strong { color: var(--text-1); font-size: 13px; }
+.ses-prog-bar {
+  height: 4px;
+  background: rgba(255,255,255,0.07);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.ses-prog-fill {
+  height: 100%;
+  background: var(--brand);
+  border-radius: var(--radius-pill);
+  transition: width 320ms cubic-bezier(0.16,1,0.3,1);
 }
 
-.set-row.completed                 { background: rgba(52, 211, 153, 0.05); }
-.set-row.completed .set-val        { color: var(--success); }
-
-/* Formulario de añadir serie */
-.add-set-form {
-  display:     flex;
-  gap:         8px;
-  margin-top:  10px;
-  align-items: flex-end;
+/* Descanso: aparece al marcar y se va solo */
+.desc-barra {
+  position: fixed;
+  left: 12px; right: 12px;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  z-index: 2500;
+  max-width: 536px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px; align-items: center;
+  padding: 10px 12px;
+  background: rgba(18, 11, 30, 0.94);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 0.5px rgba(139,77,255,0.35), 0 10px 30px rgba(0,0,0,0.5);
+  animation: subirHoja 200ms cubic-bezier(0.16,1,0.3,1);
 }
-
-.add-set-form input {
-  flex:          1;
-  background:    var(--surface-2);
-  box-shadow:      inset 0 0 0 0.5px rgba(255,255,255,0.08);
-  color:         var(--text-2);
-  font-family:   var(--font-sans);
-  font-size:     13px;
-  padding:       8px;
-  outline:       none;
-  text-align:    center;
+.desc-txt { text-align: center; line-height: 1.1; }
+#desc-num {
+  font-family: var(--font-sans);
+  font-size: 20px; font-weight: 700;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
 }
-
-.add-set-form input:focus { box-shadow: inset 0 0 0 0.5px var(--brand); }
-
-.add-set-form .lbl {
-  font-family:    var(--font-sans);
-  font-size:      9px;
-  color:          var(--text-4);
-  text-align:     center;
-  text-transform: uppercase;
-  margin-bottom:  4px;
+.desc-lbl {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 8px; letter-spacing: 1.5px;
+  color: var(--text-4);
 }
+.desc-barra button {
+  height: 38px; padding: 0 12px;
+  background: rgba(255,255,255,0.06);
+  border: none; border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-family: var(--font-sans);
+  font-size: 11px; letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.desc-barra button:active { background: rgba(139,77,255,0.25); }
 
 .add-set-btn {
   padding:     8px 12px;
@@ -595,18 +718,7 @@ a.hoy-check-card:hover {
   white-space: nowrap;
 }
 
-.add-set-btn.open { box-shadow: inset 0 0 0 0.5px var(--brand); color: var(--brand); }
-
-.save-set-btn {
-  padding:     8px 14px;
-  background:  var(--brand);
-  color:       #000;
-  border:      none;
-  font-family: var(--font-sans);
-  font-size:   13px;
-  font-weight: 700;
-  cursor:      pointer;
-}
+.add-set-btn { border-radius: var(--radius-sm); min-height: 38px; }
 
 /* Sesión completada */
 .gym-done-card {

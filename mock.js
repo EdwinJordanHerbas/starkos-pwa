@@ -42,36 +42,52 @@
     { id: 5, fecha: '2026-04-27', sueno: 5.5, energia: 5, entreno_completado: false, tipo_entreno: 'off',  nutricion: 5, tareas_completadas: 2, tareas_total: 5, notas: 'Día flojo' }
   ];
 
+  // El plan de 5 días de migration-v15.sql, tal cual está en producción
   const MOCK_RUTINAS = [
-    { id: 1, nombre: 'PUSH', descripcion: 'Pecho · Hombros · Tríceps', dias: ['lunes', 'miércoles', 'viernes'] },
-    { id: 2, nombre: 'PULL', descripcion: 'Espalda · Bíceps',          dias: ['martes', 'jueves', 'sábado']   },
-    { id: 3, nombre: 'LEGS', descripcion: 'Cuádriceps · Isquios · Glúteos', dias: ['miércoles', 'sábado']    }
+    { id: 1, nombre: 'PUSH',  descripcion: 'Pecho · Hombros · Tríceps',      dias: ['lunes']     },
+    { id: 2, nombre: 'PULL',  descripcion: 'Espalda · Bíceps',               dias: ['martes']    },
+    { id: 3, nombre: 'LEGS',  descripcion: 'Cuádriceps · Gemelos',           dias: ['miércoles'] },
+    { id: 4, nombre: 'UPPER', descripcion: 'Todo el torso, otros ángulos',   dias: ['jueves']    },
+    { id: 5, nombre: 'LOWER', descripcion: 'Femoral · Glúteo · Gemelos',     dias: ['viernes']   }
   ];
 
   const MOCK_EJERCICIOS = {
     1: [
-      { id: 1, rutina_id: 1, nombre: 'Press banca plano',         series: 4, reps_objetivo: '6-10',  orden: 1 },
-      { id: 2, rutina_id: 1, nombre: 'Press inclinado mancuerna', series: 3, reps_objetivo: '10-12', orden: 2 },
-      { id: 3, rutina_id: 1, nombre: 'Fondos en paralelas',       series: 3, reps_objetivo: '8-12',  orden: 3 },
-      { id: 4, rutina_id: 1, nombre: 'Press militar barra',       series: 4, reps_objetivo: '6-10',  orden: 4 },
-      { id: 5, rutina_id: 1, nombre: 'Elevaciones laterales',     series: 4, reps_objetivo: '12-15', orden: 5 },
-      { id: 6, rutina_id: 1, nombre: 'Extensión tríceps polea',   series: 3, reps_objetivo: '12-15', orden: 6 }
+      { id: 1, rutina_id: 1, nombre: 'Press banca plano',         series: 4, reps_objetivo: '6-10',  orden: 1, dataset_id: '0025' },
+      { id: 4, rutina_id: 1, nombre: 'Press militar barra',       series: 3, reps_objetivo: '8-12',  orden: 2, dataset_id: '0091' },
+      { id: 2, rutina_id: 1, nombre: 'Press inclinado mancuerna', series: 3, reps_objetivo: '10-12', orden: 3, dataset_id: '0314' },
+      { id: 5, rutina_id: 1, nombre: 'Elevaciones laterales',     series: 3, reps_objetivo: '12-20', orden: 4, dataset_id: '0334' },
+      { id: 6, rutina_id: 1, nombre: 'Extensión tríceps polea',   series: 3, reps_objetivo: '12-15', orden: 5, dataset_id: '0201' }
     ],
     2: [
-      { id: 7, rutina_id: 2, nombre: 'Dominadas',          series: 4, reps_objetivo: '6-10',  orden: 1 },
-      { id: 8, rutina_id: 2, nombre: 'Remo con barra',     series: 4, reps_objetivo: '8-12',  orden: 2 },
-      { id: 9, rutina_id: 2, nombre: 'Remo en polea baja', series: 3, reps_objetivo: '10-12', orden: 3 },
-      { id: 10,rutina_id: 2, nombre: 'Face pulls',         series: 3, reps_objetivo: '15-20', orden: 4 },
-      { id: 11,rutina_id: 2, nombre: 'Curl bíceps barra',  series: 3, reps_objetivo: '10-12', orden: 5 },
-      { id: 12,rutina_id: 2, nombre: 'Curl martillo',      series: 3, reps_objetivo: '12-15', orden: 6 }
+      // Los tres primeros con historial: así se ve que las series salen ya
+      // rellenas. Los dos siguientes sin él, que es como se ve el primer día.
+      { id: 7, rutina_id: 2, nombre: 'Dominadas',          series: 4, reps_objetivo: '6-10',  orden: 1, dataset_id: '0652', ultima: { peso: '10.00', reps: 8 },  mejor_peso: '12.50' },
+      { id: 8, rutina_id: 2, nombre: 'Remo con barra',     series: 4, reps_objetivo: '8-12',  orden: 2, dataset_id: '0027', ultima: { peso: '60.00', reps: 10 }, mejor_peso: '65.00' },
+      { id: 9, rutina_id: 2, nombre: 'Remo en polea baja', series: 3, reps_objetivo: '10-12', orden: 3, dataset_id: '0180', ultima: { peso: '45.00', reps: 12 } },
+      { id: 10,rutina_id: 2, nombre: 'Face pulls',         series: 3, reps_objetivo: '15-20', orden: 4, dataset_id: '0203' },
+      { id: 11,rutina_id: 2, nombre: 'Curl bíceps barra',  series: 3, reps_objetivo: '10-12', orden: 5, dataset_id: '0031' }
     ],
     3: [
-      { id: 13,rutina_id: 3, nombre: 'Sentadilla libre',    series: 4, reps_objetivo: '6-10',  orden: 1 },
-      { id: 14,rutina_id: 3, nombre: 'Prensa de piernas',   series: 3, reps_objetivo: '10-12', orden: 2 },
-      { id: 15,rutina_id: 3, nombre: 'Zancadas mancuernas', series: 3, reps_objetivo: '12c/p', orden: 3 },
-      { id: 16,rutina_id: 3, nombre: 'Curl femoral',        series: 3, reps_objetivo: '12-15', orden: 4 },
-      { id: 17,rutina_id: 3, nombre: 'Hip thrust',          series: 4, reps_objetivo: '10-12', orden: 5 },
-      { id: 18,rutina_id: 3, nombre: 'Gemelos en máquina',  series: 4, reps_objetivo: '15-20', orden: 6 }
+      { id: 13,rutina_id: 3, nombre: 'Sentadilla libre',   series: 4, reps_objetivo: '6-10',  orden: 1, dataset_id: '0043' },
+      { id: 14,rutina_id: 3, nombre: 'Prensa de piernas',  series: 3, reps_objetivo: '10-12', orden: 2, dataset_id: '0739' },
+      { id: 16,rutina_id: 3, nombre: 'Curl femoral',       series: 3, reps_objetivo: '12-15', orden: 3, dataset_id: '0586' },
+      { id: 18,rutina_id: 3, nombre: 'Gemelos en máquina', series: 4, reps_objetivo: '12-20', orden: 4, dataset_id: '0605' }
+    ],
+    4: [
+      { id: 19,rutina_id: 4, nombre: 'Press inclinado barra', series: 3, reps_objetivo: '8-12',  orden: 1, dataset_id: '0047' },
+      { id: 20,rutina_id: 4, nombre: 'Jalón al pecho polea',  series: 3, reps_objetivo: '10-12', orden: 2, dataset_id: '2330' },
+      { id: 21,rutina_id: 4, nombre: 'Fondos en paralelas',   series: 3, reps_objetivo: '8-12',  orden: 3, dataset_id: '0251' },
+      { id: 22,rutina_id: 4, nombre: 'Remo con mancuerna',    series: 3, reps_objetivo: '10-12', orden: 4, dataset_id: '0293' },
+      { id: 23,rutina_id: 4, nombre: 'Elevaciones laterales', series: 3, reps_objetivo: '15-20', orden: 5, dataset_id: '0334' },
+      { id: 24,rutina_id: 4, nombre: 'Curl martillo',         series: 3, reps_objetivo: '12-15', orden: 6, dataset_id: '0313' }
+    ],
+    5: [
+      { id: 25,rutina_id: 5, nombre: 'Peso muerto rumano',      series: 4, reps_objetivo: '8-12',  orden: 1, dataset_id: '0085' },
+      { id: 26,rutina_id: 5, nombre: 'Hip thrust',              series: 3, reps_objetivo: '10-12', orden: 2, dataset_id: '1409' },
+      { id: 27,rutina_id: 5, nombre: 'Sentadilla búlgara',      series: 3, reps_objetivo: '10-12', orden: 3, dataset_id: '0410' },
+      { id: 28,rutina_id: 5, nombre: 'Extensión de cuádriceps', series: 3, reps_objetivo: '12-15', orden: 4, dataset_id: '0585' },
+      { id: 29,rutina_id: 5, nombre: 'Gemelos de pie',          series: 3, reps_objetivo: '15-20', orden: 5, dataset_id: '0605' }
     ]
   };
 
@@ -214,9 +230,19 @@
       return mockOk({ ...body, id: Math.random(), completada: true });
     }
 
+    // DELETE /sesiones/:id/series/:ejercicio/:num — desmarcar una serie
+    if (/\/sesiones\/\d+\/series\/\d+\/\d+$/.test(u) && opts?.method === 'DELETE') {
+      return mockOk({ borradas: 1 });
+    }
+
     // PUT /sesiones/:id/completar
     if (/\/sesiones\/\d+\/completar$/.test(u) && opts?.method === 'PUT') {
       return mockOk({ id: 99, completada: true });
+    }
+
+    // DELETE /sesiones/:id — cancelar la sesión de hoy
+    if (/\/sesiones\/\d+$/.test(u) && opts?.method === 'DELETE') {
+      return mockOk({ ok: true });
     }
 
     // GET /nutricion/:fecha

@@ -1746,6 +1746,18 @@ app.post('/sesiones/:id/series', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+/* Desmarcar una serie: se toca el check por error más veces de las que
+   parece, y sin esto la única salida era corregirla a mano. */
+app.delete('/sesiones/:id/series/:ejercicio_id/:serie_num', async (req, res) => {
+  try {
+    const { rowCount } = await db(
+      'DELETE FROM series_realizadas WHERE sesion_id=$1 AND ejercicio_id=$2 AND serie_num=$3',
+      [req.params.id, req.params.ejercicio_id, req.params.serie_num]
+    );
+    res.json({ borradas: rowCount });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.put('/sesiones/:id/completar', async (req, res) => {
   const { foto_url, notas } = req.body || {};
   try {
@@ -1754,6 +1766,17 @@ app.put('/sesiones/:id/completar', async (req, res) => {
       [req.params.id, foto_url || null, notas || '']
     );
     res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* Cancelar de verdad. Antes "CANCELAR" solo limpiaba la pantalla: la fila de
+   hoy seguía en la base y la sesión reaparecía al recargar. Las series se van
+   con ella por ON DELETE CASCADE. */
+app.delete('/sesiones/:id', async (req, res) => {
+  try {
+    const { rowCount } = await db('DELETE FROM sesiones_gym WHERE id=$1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Esa sesión ya no existe' });
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

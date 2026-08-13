@@ -32,7 +32,8 @@ const ctx = {
   },
   window: {},
   localStorage: { getItem: () => null, setItem() {} },
-  setTimeout, requestAnimationFrame: fn => fn(),
+  setTimeout, setInterval, clearInterval, requestAnimationFrame: fn => fn(),
+  navigator: { vibrate: () => true },
   OKICON: new Proxy({}, { get: (_, k) => `<svg data-i="${String(k)}"></svg>` }),
   toast: (m, t) => console.log(`   [toast${t === 'error' ? ' ERROR' : ''}] ${m}`),
   confirm: () => true,
@@ -100,6 +101,75 @@ const comprobar = (nombre, cond, extra = '') => {
   });
   comprobar('sin técnica invita a elegirla', sinTecnica.includes('elegirEjercicioCatalogo(2)'));
   comprobar('primera vez se dice', sinTecnica.includes('primera vez'));
+
+  console.log('\n── SERIES DE UN TOQUE ──');
+  // Lo que hizo abandonar el registro: había que teclear dos números por serie.
+  // Ahora la fila sale escrita y basta el check.
+  const banca = { id: 1, nombre: 'Press banca plano', series: 4, reps_objetivo: '6-10',
+                  dataset_id: '0025', ultima: { peso: '60.00', reps: 8 }, mejor_peso: '82.50' };
+  enContexto('gymSeriesMap = {};');
+  const filas4 = ctx.renderEjercicioCard(banca);
+  comprobar('pinta las 4 series previstas',
+    (filas4.match(/class="sp-fila/g) || []).length === 4);
+  comprobar('salen con el peso del último día', filas4.includes('60 kg'));
+  comprobar('y con las reps del último día', filas4.includes('sp-reps">8<'));
+  comprobar('el check guarda de un toque', filas4.includes('marcarSerie(1,1)'));
+  comprobar('los números abren el ajuste', filas4.includes('ajustarSerie(1,1)'));
+
+  // Sin historial NO se puede proponer peso: es el único caso que se teclea
+  const primerDia = ctx.renderEjercicioCard({
+    id: 3, nombre: 'Remo', series: 3, reps_objetivo: '8-12', dataset_id: null, ultima: null
+  });
+  comprobar('la primera vez el peso se pide', primerDia.includes('— kg'));
+  comprobar('pero las reps salen del objetivo', primerDia.includes('sp-reps">8<'));
+
+  // Con una serie hecha hoy a 65, la siguiente propone 65 y no 60
+  enContexto(`gymSeriesMap = { 1: [{ ejercicio_id: 1, serie_num: 1, peso: '65.00', reps: 7, completada: true }] };`);
+  const trasUna = ctx.renderEjercicioCard(banca);
+  comprobar('lo de HOY manda sobre lo del último día', trasUna.includes('65 kg'));
+  comprobar('la serie hecha se marca', trasUna.includes('sp-fila done'));
+  comprobar('hereda también las reps de hoy', (trasUna.match(/sp-reps">7</g) || []).length >= 2);
+
+  // El ajuste sale sin teclado, con ± y el valor ya puesto
+  const editor = ctx.editorSerie(banca, 2);
+  comprobar('el ajuste trae ± de 2,5 kg', editor.includes("pasoValor('sp-p-1',2.5)"));
+  comprobar('y ± de una repetición', editor.includes("pasoValor('sp-r-1',1)"));
+  comprobar('con el peso propuesto dentro', /id="sp-p-1" value="65"/.test(editor));
+
+  console.log('\n── PROGRESO Y DESCANSO ──');
+  enContexto(`gymEj = [${JSON.stringify(banca)}, { id: 4, nombre: 'Fondos', series: 3 }];`);
+  const prog = ctx.barraProgresoSesion();
+  comprobar('cuenta las series de toda la sesión', prog.includes('de 7 series'));
+  comprobar('y las que llevas hechas', prog.includes('<strong>1</strong>'));
+
+  console.log('\n── UN TOQUE, DE VERDAD ──');
+  // El flujo real: pulsar el check tiene que guardar sin abrir nada
+  const llamadas = [];
+  ctx.api = async (ruta, opts = {}) => {
+    const cuerpo = opts.body ? JSON.parse(opts.body) : null;
+    llamadas.push({ ruta, metodo: opts.method || 'GET', cuerpo });
+    return { ok: true, json: async () => ({ ...cuerpo, ejercicio_id: cuerpo?.ejercicio_id }) };
+  };
+  enContexto('gymSesion = { id: 99, rutina_id: 1 };');
+
+  await ctx.marcarSerie(1, 2);
+  comprobar('un toque guarda la serie', llamadas.length === 1, llamadas[0]?.ruta);
+  comprobar('con el peso que ya ponía la fila', llamadas[0]?.cuerpo?.peso === 65,
+    `${llamadas[0]?.cuerpo?.peso} kg × ${llamadas[0]?.cuerpo?.reps}`);
+  comprobar('y con su número de serie', llamadas[0]?.cuerpo?.serie_num === 2);
+
+  await ctx.marcarSerie(1, 2);   // segundo toque sobre la misma
+  comprobar('el segundo toque la desmarca',
+    llamadas[1]?.metodo === 'DELETE' && llamadas[1]?.ruta === '/sesiones/99/series/1/2');
+
+  // La primera vez de un ejercicio no puede inventarse el peso: abre el ajuste
+  enContexto(`gymEj = [{ id: 5, nombre: 'Remo', series: 3, reps_objetivo: '10', ultima: null }];
+              gymSeriesMap = {};`);
+  const antes = llamadas.length;
+  await ctx.marcarSerie(5, 1);
+  comprobar('sin peso conocido no guarda nada a ciegas', llamadas.length === antes);
+  comprobar('abre el ajuste para decirlo una vez',
+    nodo('sets-5').innerHTML.includes('sp-edit'));
 
   console.log('\n── VISOR DE TÉCNICA ──');
   enContexto(`gymEj = [{ id: 1, nombre: 'Press banca plano', dataset_id: '0025' }];`);

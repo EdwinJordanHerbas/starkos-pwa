@@ -18,7 +18,6 @@ let gymRutinas        = [];
 let gymSesion         = null;
 let gymEj             = [];
 let gymSeriesMap      = {};
-let gymOpenForm       = null;
 let gymHistoryVisible = false;
 let gymEditando       = null;   // id de la rutina en edición, o null
 
@@ -177,17 +176,26 @@ function renderRutinaSelect() {
     return;
   }
 
+  /* Los días ya estaban guardados en la rutina pero no se usaban aquí: al
+     llegar al gimnasio había que acordarse de qué tocaba. La de hoy va
+     primera y marcada; el resto sigue estando a un toque. */
+  const hoy   = DIAS_SEMANA[(new Date().getDay() + 6) % 7];   // getDay(): 0 = domingo
+  const esHoy = r => Array.isArray(r.dias)
+    && r.dias.some(d => String(d).toLowerCase() === hoy);
+  const orden = [...gymRutinas].sort((a, b) => (esHoy(b) ? 1 : 0) - (esHoy(a) ? 1 : 0));
+
   gc.innerHTML =
     '<div id="gym-objectives-wrap"><div class="gym-obj-loading">Calculando progreso…</div></div>' +
     '<div class="stl" style="margin:16px 0 10px">ELIGE RUTINA DE HOY</div>' +
-    gymRutinas.map(r => {
+    orden.map(r => {
       // Banner de fondo por rutina (assets/gym-*.webp) — degradado para legibilidad del texto
       const img = GYM_BANNERS[(r.nombre || '').toUpperCase()];
       const bg  = img ? ` style="background:linear-gradient(90deg, rgba(10,6,18,.97) 32%, rgba(10,6,18,.55)), url('${img}') right center / cover no-repeat"` : '';
       return `
-      <div class="rc"${bg}>
+      <div class="rc${esHoy(r) ? ' rc-hoy' : ''}"${bg}>
         <div class="rc-main" onclick="iniciarSesion(${r.id})">
-          <div class="rn">${gesc(r.nombre || '')}</div>
+          <div class="rn">${gesc(r.nombre || '')}${
+            esHoy(r) ? '<span class="rc-hoy-tag">HOY</span>' : ''}</div>
           <div class="rd">${gesc(r.descripcion || '')}</div>
         </div>
         <button class="rc-edit" onclick="editarRutina(${r.id})" title="Editar rutina"
@@ -199,12 +207,20 @@ function renderRutinaSelect() {
   renderGymObjectives();
 }
 
-const GYM_ICONS = { 'PUSH': OKICON.dumbbell, 'PULL': OKICON.pull, 'LEGS': OKICON.legs };
+// UPPER y LOWER son el segundo pase de torso y pierna del plan de 5 días:
+// comparten icono y banner con su día hermano en vez de quedarse sin nada.
+const GYM_ICONS = {
+  'PUSH': OKICON.dumbbell, 'PULL': OKICON.pull, 'LEGS': OKICON.legs,
+  'UPPER': OKICON.pull,    'LOWER': OKICON.legs
+};
 // En WebP y no en PNG: son los mismos 1376×768, pero 27 KB en vez de 1.017.
 // Los tres banners juntos bajan de 2,6 MB a 77 KB, que en el gimnasio con dos
 // rayas de cobertura es la diferencia entre verlos y no verlos. El PNG sigue
 // en assets/ como original: de ahí salen los WebP si hay que regenerarlos.
-const GYM_BANNERS = { 'PUSH': 'assets/gym-push.webp', 'PULL': 'assets/gym-pull.webp', 'LEGS': 'assets/gym-legs.webp' };
+const GYM_BANNERS = {
+  'PUSH':  'assets/gym-push.webp', 'PULL':  'assets/gym-pull.webp', 'LEGS': 'assets/gym-legs.webp',
+  'UPPER': 'assets/gym-pull.webp', 'LOWER': 'assets/gym-legs.webp'
+};
 
 async function renderGymObjectives() {
   const wrap = document.getElementById('gym-objectives-wrap');
@@ -284,7 +300,8 @@ async function iniciarSesion(rutina_id) {
     gymEj = ejRes.ok ? await ejRes.json() : [];
 
     gymSeriesMap = {};
-    gymOpenForm  = null;
+    _ajustando   = null;
+    pararDescanso();
     await cargarCatalogo();
     renderGym();
     toast('Sesión iniciada.');
@@ -306,6 +323,7 @@ function renderSesionActiva() {
 
   const header = `
     <div class="stl">${gesc(rutinaNombre)}</div>
+    ${barraProgresoSesion()}
     <div style="display:flex;gap:8px;margin-bottom:16px">
       <button class="bs" style="flex:1" onclick="completarSesion()">COMPLETAR SESIÓN</button>
       <button class="rb" style="flex:0 0 auto;padding:0 14px;height:48px;cursor:pointer;font-family:var(--font-sans);font-size:11px" onclick="cancelarSesion()">CANCELAR</button>
@@ -319,26 +337,103 @@ function renderSesionActiva() {
   gc.innerHTML = header + cards;
 }
 
+/** Cuánto queda. En medio de la sesión, saber que vas por 8 de 21 es lo que
+    decide si haces el último ejercicio o te vas a casa. */
+function barraProgresoSesion() {
+  const previstas = gymEj.reduce((a, e) => a + seriesPrevistas(e), 0);
+  const hechas    = gymEj.reduce((a, e) => a + seriesDe(e.id).length, 0);
+  const pct       = previstas ? Math.min(100, Math.round((hechas / previstas) * 100)) : 0;
+  return `
+    <div class="ses-prog" id="ses-prog">
+      <div class="ses-prog-txt"><strong>${hechas}</strong> de ${previstas} series</div>
+      <div class="ses-prog-bar"><div class="ses-prog-fill" style="width:${pct}%"></div></div>
+    </div>`;
+}
+
+function refrescarProgresoSesion() {
+  const el = document.getElementById('ses-prog');
+  if (el) el.outerHTML = barraProgresoSesion();
+}
+
 /* ══════════════════════════════════════════════════════════════════
    6. CARD DE EJERCICIO — con la técnica a la vista
    ══════════════════════════════════════════════════════════════════ */
-function renderEjercicioCard(e) {
-  const series = gymSeriesMap[e.id] || [];
-  const cat    = e.dataset_id && _catIdx ? _catIdx.get(e.dataset_id) : null;
+/* ── Las series ya vienen puestas ──────────────────────────────────
+   El registro se abandonó por esto: seis ejercicios × cuatro series eran
+   veinte formularios con dos números tecleados cada uno, de pie y sudando.
+   En seis sesiones no llegó a guardarse ni una serie. Y el atajo que había
+   —dejarlo en blanco para repetir lo del último día— no podía funcionar
+   nunca: sin ninguna serie guardada no hay "último día" del que copiar.
+   Ahora cada serie sale escrita de antemano y se confirma de un toque; los
+   números solo se tocan el día que cambian. */
 
-  const filas = series.map((s, i) => `
-    <div class="set-row${s.completada ? ' completed' : ''}">
-      <span class="set-num">${i + 1}</span>
-      <span class="set-val">${s.peso} kg</span>
-      <span class="set-val">${s.reps} reps</span>
-      <span class="set-chk">${OKICON.check}</span>
-    </div>`
-  ).join('');
+/** Series de hoy de un ejercicio, en orden. */
+function seriesDe(ejId) {
+  return (gymSeriesMap[ejId] || []).slice().sort((a, b) => a.serie_num - b.serie_num);
+}
+
+function serieNum(ejId, num) {
+  return (gymSeriesMap[ejId] || []).find(s => Number(s.serie_num) === Number(num)) || null;
+}
+
+/** Cuántas filas se pintan: las del plan, o más si hoy has hecho de sobra. */
+function seriesPrevistas(e) {
+  return Math.max(Number(e.series) || 3, seriesDe(e.id).length);
+}
+
+/** "8-12" → 8 · "12c/p" → 12 · "15" → 15. Sin número, 10. */
+function repsObjetivo(e) {
+  const m = String(e?.reps_objetivo || '').match(/\d+/);
+  return m ? Number(m[0]) : 10;
+}
+
+/** Con qué sale rellena la serie `num` sin teclear nada: manda lo que ya has
+    hecho HOY en ese ejercicio, luego el último día, y por último el objetivo
+    de la rutina. Si nunca lo has hecho, el peso queda a null: es el único
+    caso en el que hay que decirlo a mano. */
+function propuesta(e, num) {
+  const previas = seriesDe(e.id).filter(s => Number(s.serie_num) < Number(num));
+  const base    = previas.length ? previas[previas.length - 1] : seriesDe(e.id).pop();
+  if (base) return { peso: Number(base.peso), reps: Number(base.reps) };
+  if (e.ultima && e.ultima.peso != null) {
+    return { peso: Number(e.ultima.peso), reps: Number(e.ultima.reps) || repsObjetivo(e) };
+  }
+  return { peso: null, reps: repsObjetivo(e) };
+}
+
+const kgTxt = v => Number(v).toLocaleString('es-ES', { maximumFractionDigits: 1 });
+
+/** Las filas de serie: los números abren el ajuste, el check la da por hecha. */
+function filasSerie(e) {
+  const total = seriesPrevistas(e);
+  let html = '';
+  for (let n = 1; n <= total; n++) {
+    const hecha = serieNum(e.id, n);
+    const p     = hecha ? { peso: Number(hecha.peso), reps: Number(hecha.reps) } : propuesta(e, n);
+    const pesoT = p.peso != null ? `${kgTxt(p.peso)} kg` : '— kg';
+    html += `
+      <div class="sp-fila${hecha ? ' done' : ''}" id="sp-${e.id}-${n}">
+        <span class="sp-num">${n}</span>
+        <button class="sp-vals" onclick="ajustarSerie(${e.id},${n})"
+                aria-label="Ajustar serie ${n}">
+          <span class="sp-peso${p.peso == null ? ' sp-vacio' : ''}">${pesoT}</span>
+          <span class="sp-x">×</span>
+          <span class="sp-reps">${p.reps}</span>
+        </button>
+        <button class="sp-chk" onclick="marcarSerie(${e.id},${n})"
+                aria-label="${hecha ? `Desmarcar serie ${n}` : `Serie ${n} hecha`}">${OKICON.check}</button>
+      </div>`;
+  }
+  return html;
+}
+
+function renderEjercicioCard(e) {
+  const cat = e.dataset_id && _catIdx ? _catIdx.get(e.dataset_id) : null;
 
   /* La referencia que se olvida delante del banco: con cuánto te quedaste.
      Postgres devuelve los NUMERIC como texto ("60.00"), así que hay que
      pasarlos por Number o la tarjeta diría "60.00 kg". */
-  const kg  = v => Number(v).toLocaleString('es-ES', { maximumFractionDigits: 1 });
+  const kg  = kgTxt;
   const ult = e.ultima;
   const refHTML = ult && ult.peso != null
     ? `<div class="ej-ultima">última vez · <strong>${kg(ult.peso)} kg × ${ult.reps}</strong>${
@@ -377,21 +472,177 @@ function renderEjercicioCard(e) {
         </div>
       </div>
 
-      <div class="sets-list">${filas}</div>
+      <div class="sets-list" id="sets-${e.id}">${filasSerie(e)}</div>
 
-      <div style="display:flex;justify-content:flex-end;margin-top:8px">
-        <button class="add-set-btn" onclick="toggleForm(${e.id})">+ SERIE</button>
-      </div>
-
-      <div class="add-set-form" id="form-${e.id}" style="display:none">
-        <div class="lbl">PESO KG</div>
-        <input type="number" id="peso-${e.id}" placeholder="${ult?.peso != null ? kg(ult.peso) : 'Peso kg'}" min="0" step="0.5" inputmode="decimal">
-        <div class="lbl" style="margin-top:6px">REPS</div>
-        <input type="number" id="reps-${e.id}" placeholder="${ult?.reps ?? 'Reps'}" min="0" step="1" inputmode="numeric">
-        <button class="save-set-btn" style="margin-top:8px;width:100%"
-                onclick="guardarSerie(${e.id})">GUARDAR</button>
+      <div class="sp-pie">
+        <button class="add-set-btn" onclick="serieExtra(${e.id})">+ SERIE EXTRA</button>
       </div>
     </div>`;
+}
+
+/* ── Marcar, ajustar y desmarcar ─────────────────────────────────── */
+
+/** Un toque: guarda la serie con lo que ya pone la fila. */
+async function marcarSerie(ejId, num) {
+  const e = gymEj.find(x => x.id === ejId);
+  if (!e) return;
+  if (serieNum(ejId, num)) return desmarcarSerie(ejId, num);
+
+  const p = propuesta(e, num);
+  if (p.peso == null) return ajustarSerie(ejId, num);   // primera vez: hay que decirlo
+
+  await enviarSerie(ejId, num, p.peso, p.reps);
+}
+
+async function enviarSerie(ejId, num, peso, reps) {
+  if (!(peso > 0) || !(reps > 0)) { toast('Peso y repeticiones tienen que ser mayores que cero', 'error'); return; }
+  try {
+    const res = await api(`/sesiones/${gymSesion.id}/series`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ ejercicio_id: ejId, serie_num: num, peso, reps, completada: true })
+    });
+    if (!res.ok) throw new Error(res.status);
+    const nueva = await res.json();
+
+    const lista = gymSeriesMap[ejId] || (gymSeriesMap[ejId] = []);
+    const i = lista.findIndex(s => Number(s.serie_num) === Number(num));
+    if (i >= 0) lista[i] = nueva; else lista.push(nueva);
+
+    _ajustando = null;
+    repintarSeries(ejId);
+    refrescarProgresoSesion();
+    if (navigator.vibrate) navigator.vibrate(25);
+    arrancarDescanso();
+  } catch {
+    toast('No se pudo guardar la serie', 'error');
+  }
+}
+
+async function desmarcarSerie(ejId, num) {
+  try {
+    const res = await api(`/sesiones/${gymSesion.id}/series/${ejId}/${num}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(res.status);
+    gymSeriesMap[ejId] = (gymSeriesMap[ejId] || []).filter(s => Number(s.serie_num) !== Number(num));
+    _ajustando = null;
+    repintarSeries(ejId);
+    refrescarProgresoSesion();
+    toast(`Serie ${num} desmarcada`);
+  } catch {
+    toast('No se pudo desmarcar', 'error');
+  }
+}
+
+/** Repinta solo las series de esa tarjeta: la técnica y el scroll no se mueven. */
+function repintarSeries(ejId) {
+  const e  = gymEj.find(x => x.id === ejId);
+  const el = document.getElementById(`sets-${ejId}`);
+  if (e && el) el.innerHTML = filasSerie(e) + (_ajustando?.ejId === ejId ? editorSerie(e, _ajustando.num) : '');
+}
+
+/* ── Ajuste sin teclado ───────────────────────────────────────────
+   En el gimnasio se cambia de dos en dos discos y medio, no se escribe:
+   los botones ± resuelven el 90 % de los días. El campo sigue ahí para el
+   día que pasas de 60 a 80 de golpe. */
+let _ajustando = null;   // {ejId, num}
+
+function ajustarSerie(ejId, num) {
+  const e = gymEj.find(x => x.id === ejId);
+  if (!e) return;
+  const mismo = _ajustando && _ajustando.ejId === ejId && Number(_ajustando.num) === Number(num);
+  _ajustando = mismo ? null : { ejId, num };
+  repintarSeries(ejId);
+  if (!mismo) document.getElementById(`sp-p-${ejId}`)?.focus({ preventScroll: true });
+}
+
+function editorSerie(e, num) {
+  const hecha = serieNum(e.id, num);
+  const p     = hecha ? { peso: Number(hecha.peso), reps: Number(hecha.reps) } : propuesta(e, num);
+  const peso  = p.peso != null ? p.peso : '';
+  return `
+    <div class="sp-edit" id="sp-edit-${e.id}">
+      <div class="sp-edit-tit">SERIE ${num}</div>
+      <div class="sp-paso">
+        <button onclick="pasoValor('sp-p-${e.id}',-2.5)" aria-label="Menos 2,5 kg">−</button>
+        <input type="number" id="sp-p-${e.id}" value="${peso}" min="0" step="0.5"
+               inputmode="decimal" placeholder="kg" aria-label="Peso en kilos">
+        <span class="sp-un">kg</span>
+        <button onclick="pasoValor('sp-p-${e.id}',2.5)" aria-label="Más 2,5 kg">+</button>
+      </div>
+      <div class="sp-paso">
+        <button onclick="pasoValor('sp-r-${e.id}',-1)" aria-label="Una repetición menos">−</button>
+        <input type="number" id="sp-r-${e.id}" value="${p.reps}" min="1" step="1"
+               inputmode="numeric" placeholder="reps" aria-label="Repeticiones">
+        <span class="sp-un">reps</span>
+        <button onclick="pasoValor('sp-r-${e.id}',1)" aria-label="Una repetición más">+</button>
+      </div>
+      <button class="sp-ok" onclick="guardarAjuste(${e.id},${num})">${
+        hecha ? 'CORREGIR' : 'SERIE HECHA'}</button>
+    </div>`;
+}
+
+function pasoValor(inputId, delta) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  const v = Math.max(0, Math.round(((Number(el.value) || 0) + delta) * 2) / 2);
+  el.value = v;
+  if (navigator.vibrate) navigator.vibrate(10);
+}
+
+function guardarAjuste(ejId, num) {
+  const peso = Number(document.getElementById(`sp-p-${ejId}`)?.value);
+  const reps = Number(document.getElementById(`sp-r-${ejId}`)?.value);
+  return enviarSerie(ejId, num, peso, reps);
+}
+
+/** Una serie de más de las previstas: se pinta y se abre para confirmarla. */
+function serieExtra(ejId) {
+  const e = gymEj.find(x => x.id === ejId);
+  if (!e) return;
+  e.series = seriesPrevistas(e) + 1;   // solo en esta pantalla: la rutina no cambia
+  _ajustando = null;
+  repintarSeries(ejId);
+  refrescarProgresoSesion();
+}
+
+/* ── Descanso ─────────────────────────────────────────────────────
+   Contar mentalmente entre series es la otra razón de mirar el móvil. Sale
+   solo al marcar y se quita sin pedir permiso; vibra al terminar, que en el
+   gimnasio con música es lo único que se nota. */
+let _descTimer = null, _descFin = 0;
+const DESCANSO_SEG = 90;
+
+function arrancarDescanso(seg = DESCANSO_SEG) {
+  _descFin = Date.now() + seg * 1000;
+  if (!document.getElementById('desc-barra')) {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div id="desc-barra" class="desc-barra">
+        <button class="desc-mas" onclick="sumarDescanso(30)" aria-label="Treinta segundos más">+30s</button>
+        <div class="desc-txt"><span id="desc-num">1:30</span><span class="desc-lbl">DESCANSO</span></div>
+        <button class="desc-fin" onclick="pararDescanso()" aria-label="Saltar descanso">SALTAR</button>
+      </div>`);
+  }
+  clearInterval(_descTimer);
+  _descTimer = setInterval(ticDescanso, 250);
+  ticDescanso();
+}
+
+function ticDescanso() {
+  const num = document.getElementById('desc-num');
+  const resta = Math.max(0, Math.round((_descFin - Date.now()) / 1000));
+  if (num) num.textContent = `${Math.floor(resta / 60)}:${String(resta % 60).padStart(2, '0')}`;
+  if (resta <= 0) {
+    if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
+    pararDescanso();
+  }
+}
+
+function sumarDescanso(seg) { _descFin += seg * 1000; ticDescanso(); }
+
+function pararDescanso() {
+  clearInterval(_descTimer);
+  _descTimer = null;
+  document.getElementById('desc-barra')?.remove();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -523,95 +774,14 @@ function cerrarVisorTecnica() {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   8. TOGGLE FORMULARIO DE SERIE
-   ══════════════════════════════════════════════════════════════════ */
-function toggleForm(ejId) {
-  if (gymOpenForm !== null && gymOpenForm !== ejId) {
-    const prev = document.getElementById(`form-${gymOpenForm}`);
-    if (prev) prev.style.display = 'none';
-  }
-
-  const form = document.getElementById(`form-${ejId}`);
-  if (!form) return;
-
-  const isOpen = form.style.display !== 'none';
-  form.style.display = isOpen ? 'none' : 'block';
-  gymOpenForm = isOpen ? null : ejId;
-
-  if (!isOpen) {
-    const pesoInput = document.getElementById(`peso-${ejId}`);
-    if (pesoInput) pesoInput.focus();
-  }
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   9. GUARDAR SERIE
-   ══════════════════════════════════════════════════════════════════ */
-async function guardarSerie(ejId) {
-  const pesoEl = document.getElementById(`peso-${ejId}`);
-  const repsEl = document.getElementById(`reps-${ejId}`);
-  const ej     = gymEj.find(e => e.id === ejId);
-
-  // Dejarlo en blanco repite lo de la última vez, que es lo que se hace
-  // casi siempre: el placeholder ya enseña qué valor se va a guardar.
-  const conDefecto = (valor, porDefecto) =>
-    String(valor ?? '').trim() === '' ? Number(porDefecto) : Number(valor);
-
-  const peso = conDefecto(pesoEl?.value, ej?.ultima?.peso);
-  const reps = conDefecto(repsEl?.value, ej?.ultima?.reps);
-
-  if (!peso || peso <= 0 || !reps || reps <= 0) {
-    toast('Introduce peso y repeticiones', 'error');
-    return;
-  }
-
-  const serie_num = (gymSeriesMap[ejId]?.length || 0) + 1;
-
-  try {
-    const res = await api(`/sesiones/${gymSesion.id}/series`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ ejercicio_id: ejId, serie_num, peso, reps, completada: true })
-    });
-    if (!res.ok) throw new Error(res.status);
-    const nueva = await res.json();
-
-    if (!gymSeriesMap[ejId]) gymSeriesMap[ejId] = [];
-    gymSeriesMap[ejId].push(nueva);
-
-    if (pesoEl) pesoEl.value = '';
-    if (repsEl) repsEl.value = '';
-    gymOpenForm = null;
-
-    /* Actualizar solo la lista de series (preserva la técnica y el scroll) */
-    const card = document.getElementById(`ec-${ejId}`);
-    if (card) {
-      const setsEl = card.querySelector('.sets-list');
-      if (setsEl) {
-        setsEl.innerHTML = gymSeriesMap[ejId].map((s, i) => `
-          <div class="set-row${s.completada ? ' completed' : ''}">
-            <span class="set-num">${i + 1}</span>
-            <span class="set-val">${s.peso} kg</span>
-            <span class="set-val">${s.reps} reps</span>
-            <span class="set-chk">${OKICON.check}</span>
-          </div>`
-        ).join('');
-      }
-      const formEl = document.getElementById(`form-${ejId}`);
-      if (formEl) formEl.style.display = 'none';
-    }
-
-    toast(`Serie ${serie_num} guardada.`);
-  } catch {
-    toast('Error al guardar serie', 'error');
-  }
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   10. COMPLETAR / CANCELAR SESIÓN
+   8. COMPLETAR / CANCELAR SESIÓN
    ══════════════════════════════════════════════════════════════════ */
 async function completarSesion() {
-  if (!confirm('¿Completar sesión de hoy?')) return;
+  const hechas = gymEj.reduce((a, e) => a + seriesDe(e.id).length, 0);
+  if (!confirm(hechas
+    ? `¿Completar la sesión con ${hechas} series?`
+    : '¿Completar la sesión sin ninguna serie apuntada?')) return;
+  pararDescanso();
 
   try {
     const res = await api(`/sesiones/${gymSesion.id}/completar`, {
@@ -632,17 +802,28 @@ async function completarSesion() {
   }
 }
 
-function cancelarSesion() {
-  if (!confirm('¿Cancelar sesión? Los datos guardados se mantienen.')) return;
+/* Cancelar borraba la pantalla pero no la sesión: la fila de hoy seguía en la
+   base y volvía a salir al recargar, con sus series. Ahora se va de verdad. */
+async function cancelarSesion() {
+  const hechas = gymEj.reduce((a, e) => a + seriesDe(e.id).length, 0);
+  if (!confirm(hechas
+    ? `¿Cancelar la sesión? Se borrarán las ${hechas} series de hoy.`
+    : '¿Cancelar la sesión de hoy?')) return;
+
+  pararDescanso();
+  try {
+    await api(`/sesiones/${gymSesion.id}`, { method: 'DELETE' });
+  } catch { /* si no se pudo borrar, loadGym la volverá a mostrar */ }
+
   gymSesion    = null;
   gymEj        = [];
   gymSeriesMap = {};
-  gymOpenForm  = null;
-  renderGym();
+  _ajustando   = null;
+  loadGym();
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   11. EDITOR DE RUTINAS
+   9. EDITOR DE RUTINAS
    Las rutinas y sus ejercicios venían sembrados por SQL: la app tenía
    los endpoints pero ninguna pantalla, así que cambiar una serie
    obligaba a entrar en la base de datos.
@@ -855,7 +1036,7 @@ async function moverEjercicio(id, delta) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   12. BUSCADOR DEL CATÁLOGO
+   10. BUSCADOR DEL CATÁLOGO
    1.324 ejercicios con nombre en español, animación y músculos.
    ══════════════════════════════════════════════════════════════════ */
 let _buscadorDestino = null;   // {modo:'añadir'|'vincular', ejId?}
@@ -998,7 +1179,7 @@ async function elegirDelCatalogo(datasetId) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   13. RENDER SESIÓN COMPLETADA — DUNGEON CLEARED
+   11. RENDER SESIÓN COMPLETADA — DUNGEON CLEARED
    ══════════════════════════════════════════════════════════════════ */
 function renderSesionDone() {
   const gc = document.getElementById('gym-content');
@@ -1036,7 +1217,7 @@ function renderSesionDone() {
   /* ── Cards de ejercicios ── */
   const summaryHTML = ejStats.map(e => {
     const pills = e.series.map(s =>
-      `<span class="done-set-pill">${s.peso}kg×${s.reps}</span>`
+      `<span class="done-set-pill">${kgTxt(s.peso)}kg×${s.reps}</span>`
     ).join('');
     const volStr = e.vol > 0
       ? `<div class="done-ej-vol">${e.vol.toFixed(0)} kg vol.</div>`
@@ -1078,11 +1259,11 @@ function renderSesionDone() {
       <div class="done-stats-row">
         <div class="done-stat">
           <div class="done-stat-val">${totalSeries}</div>
-          <div class="done-stat-lbl">SERIES</div>
+          <div class="done-stat-lbl">SERIE${totalSeries === 1 ? '' : 'S'}</div>
         </div>
         <div class="done-stat">
           <div class="done-stat-val">${totalEjercicios}</div>
-          <div class="done-stat-lbl">EJERCICIOS</div>
+          <div class="done-stat-lbl">EJERCICIO${totalEjercicios === 1 ? '' : 'S'}</div>
         </div>
         ${totalVol > 0 ? `
         <div class="done-stat">
@@ -1109,7 +1290,7 @@ function renderSesionDone() {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   14. HISTORIAL GYM
+   12. HISTORIAL GYM
    ══════════════════════════════════════════════════════════════════ */
 function toggleGymHistory() {
   gymHistoryVisible = !gymHistoryVisible;
@@ -1152,7 +1333,7 @@ async function loadGymHistory() {
         series.forEach(sr => {
           const key = sr.ejercicio_id;
           if (!byEj[key]) byEj[key] = { nombre: sr.ejercicio_nombre || `Ej. ${key}`, sets: [] };
-          byEj[key].sets.push(`${sr.peso}kg×${sr.reps}`);
+          byEj[key].sets.push(`${kgTxt(sr.peso)}kg×${sr.reps}`);
         });
         detailHTML = Object.values(byEj).map(ej => `
           <div class="gh-exercise">
@@ -1177,7 +1358,7 @@ async function loadGymHistory() {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   15. COMPOSICIÓN CORPORAL
+   13. COMPOSICIÓN CORPORAL
    ══════════════════════════════════════════════════════════════════
    Entrenar no es progresar. Hasta aquí OKIRO sabía si habías ido al
    gimnasio, pero no si estabas recuperando la masa que perdiste, que es

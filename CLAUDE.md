@@ -51,8 +51,9 @@ Gestor: **npm** (`package-lock.json`).
 ## Base de datos
 
 Postgres en el droplet, compartido con otros proyectos. El esquema va por **migraciones
-acumulativas** en la raíz, de `migration.sql` a `migration-v13.sql`. Son idempotentes y las
-aplica `deploy.sh` en orden; a mano solo si algo falló.
+acumulativas** en la raíz, de `migration.sql` a `migration-v15.sql`. Son idempotentes y las
+aplica `deploy.sh` en orden; a mano solo si algo falló. **`deploy.sh` las lista una a una**:
+una migración nueva que no se añada a esa línea no se aplica nunca.
 
 Para probar cambios del backend sin tocar los datos reales: crear `starkos_test` en el mismo
 Postgres, aplicarle las migraciones y arrancar ahí. Nunca contra `starkos`.

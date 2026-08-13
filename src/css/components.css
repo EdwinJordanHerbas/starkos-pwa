@@ -846,7 +846,7 @@ label {
 /* NÚMEROS Y DATOS EN MONOESPACIADA — estética "System"            */
 /* ════════════════════════════════════════════════════════════════ */
 .mv, .kcal-big, .kcal-label, #td, #td-num,
-.rank-badge, .set-val, .set-num, .macro-label,
+.rank-badge, .sp-peso, .sp-reps, .sp-num, .macro-label,
 .li-date, .er2, .mi {
   font-family: var(--font-mono);
 }
@@ -860,6 +860,5 @@ label {
 
 /* Iconos SVG en glifos de estado y borrado */
 .hoy-card-status svg { width: 18px; height: 18px; display: inline-block; vertical-align: middle; }
-.set-chk svg        { width: 14px; height: 14px; display: block; }
 .meal-del svg       { width: 15px; height: 15px; display: block; }
 
