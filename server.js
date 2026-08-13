@@ -1,4 +1,4 @@
-// OKIRO Backend v7.2.0 — producción
+// OKIRO Backend v7.3.0 — producción
 // Requiere Node 18+ (usa fetch global)
 const express = require('express');
 const fs   = require('fs');
@@ -2822,7 +2822,7 @@ app.patch('/logs/:fecha/nota', async (req, res) => {
 // Devolver el index ante cualquier ruta desconocida taparía además los 404 de
 // la API, que es justo lo que hace falta ver cuando algo se llama mal.
 app.listen(PORT, () => {
-  console.log(`OKIRO Backend v7.2.0 · :${PORT}`);
+  console.log(`OKIRO Backend v7.3.0 · :${PORT}`);
   console.log(`· Auth:  ${APP_TOKEN ? 'ACTIVADA (APP_TOKEN)' : 'DESACTIVADA — define APP_TOKEN en producción'}`);
   if (APP_TOKEN && APP_TOKEN.length < 24) {
     console.warn(`· ⚠ CLAVE DÉBIL: ${APP_TOKEN.length} caracteres. Detrás de esta clave están tu base de datos`);
