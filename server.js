@@ -299,21 +299,26 @@ app.post('/push/tick', async (req, res) => {
     try {
       const m = await misionDelDia(hoy);
       if (tipo === 'cierre') {
-        // Rechazarla cuenta como fallarla: decidir que no, no evita el coste.
-        const cumplida = m.completa && m.estado !== 'rechazada';
+        const cierre = cierreDeMision(m);
         await db(
           `UPDATE misiones SET resultado=$1, xp_bonus=$2, cerrada_en=NOW()
-            WHERE fecha=$3 AND resultado IS NULL`,
-          [cumplida ? 'cumplida' : 'fallada',
-           cumplida ? XP_MISION_CUMPLIDA : XP_MISION_FALLADA, hoy]);
+            WHERE fecha=$3 AND resultado IS NULL`, [cierre.resultado, cierre.xp, hoy]);
         const p = await calcularProgreso();
-        titulo = cumplida ? 'MISIÓN CUMPLIDA' : 'MISIÓN FALLADA';
-        // Al fallar, el aviso no se queda en el castigo: recuerda lo que lleva
-        // hecho. Un push que solo regaña es un push que se desactiva.
         const aliento = await mensajeDeAliento(m, hoy);
-        cuerpo = cumplida
-          ? `${m.total} de ${m.total} · +${XP_MISION_CUMPLIDA} XP · rango ${p.rango}. ${aliento}`
-          : `${m.cumplidos} de ${m.total} · ${XP_MISION_FALLADA} XP. ${aliento}`;
+        if (cierre.resultado === 'cumplida') {
+          titulo = 'MISIÓN CUMPLIDA';
+          cuerpo = `${m.total} de ${m.total} · +${XP_MISION_CUMPLIDA} XP · rango ${p.rango}. ${aliento}`;
+        } else if (cierre.resultado === 'expirada') {
+          // Ni castigo ni felicitación: la misión estaba ahí y el día pasó.
+          // El aviso lo dice sin restar nada, que es lo que de verdad ocurrió.
+          titulo = 'MISIÓN SIN ABRIR';
+          cuerpo = `La misión de hoy caducó sin abrirse. Sin coste. ${aliento}`;
+        } else {
+          titulo = 'MISIÓN FALLADA';
+          // Al fallar, el aviso no se queda en el castigo: recuerda lo que
+          // lleva hecho. Un push que solo regaña es un push que se desactiva.
+          cuerpo = `${m.cumplidos} de ${m.total} · ${XP_MISION_FALLADA} XP. ${aliento}`;
+        }
         if (cuerpo.length > 200) cuerpo = cuerpo.slice(0, 197) + '...';
       } else if (m.total) {
         const pend = m.objetivos.filter(o => !o.cumplido);
@@ -373,20 +378,35 @@ async function objetivosDelDia(fecha, recuperacion = false) {
   // 3. Descanso — registrar el sueño es lo que sostiene todo el cruce
   objetivos.push({ clave: 'sueno', texto: 'Registrar el sueño de la noche', meta: 1 });
 
-  // 4. Proyectos — cerrar un hito del que más lo necesita
-  const { rows: proyRows } = await db('SELECT * FROM proyectos').catch(() => ({ rows: [] }));
-  const hojas = decorarProyectos(aplicarFuentes(proyRows, await valoresAutomaticos()), await contarTareas())
-    .filter(p => !p.es_padre && p.progreso_real < 100 && p.tareas_total > p.tareas_hechas)
-    .sort((a, b) => a.progreso_real - b.progreso_real);
-  if (hojas.length) {
-    // En recuperación se pide el doble: la penalización es más esfuerzo, no
-    // menos, como la zona de penalización del anime.
-    const n = recuperacion ? 2 : 1;
-    objetivos.push({
-      clave: 'hito',
-      texto: n === 1 ? `Cerrar un hito de ${hojas[0].nombre}` : `Cerrar ${n} hitos`,
-      meta:  n
-    });
+  // 4. Proyectos — una tarea de verdad, la que ya tienes abierta en el panel.
+  // Antes esto pedía "cerrar un hito" de `proyecto_tareas`, una lista que se
+  // quedó parada en julio mientras el trabajo real se movía a
+  // panel.neumorstudio.com. Pedir algo de una lista muerta es la forma más
+  // rápida de que la misión deje de significar nada. Ahora manda el panel, y
+  // los hitos locales quedan de respaldo para lo que no es del estudio.
+  // En recuperación se pide el doble: la penalización es más esfuerzo, no
+  // menos, como la zona de penalización del anime.
+  const n = recuperacion ? 2 : 1;
+  const mias = await tareasMiasDelPanel().catch(() => []);
+  if (mias.length) {
+    // Con una sola tarea se dice cuál: un objetivo con nombre y apellidos se
+    // hace, uno abstracto se pospone.
+    const texto = n === 1
+      ? `Cerrar en el panel: ${mias[0].titulo}`
+      : `Cerrar ${n} tareas del panel`;
+    objetivos.push({ clave: 'tarea_ns', texto, meta: n });
+  } else {
+    const { rows: proyRows } = await db('SELECT * FROM proyectos').catch(() => ({ rows: [] }));
+    const hojas = decorarProyectos(aplicarFuentes(proyRows, await valoresAutomaticos()), await contarTareas())
+      .filter(p => !p.es_padre && p.progreso_real < 100 && p.tareas_total > p.tareas_hechas)
+      .sort((a, b) => a.progreso_real - b.progreso_real);
+    if (hojas.length) {
+      objetivos.push({
+        clave: 'hito',
+        texto: n === 1 ? `Cerrar un hito de ${hojas[0].nombre}` : `Cerrar ${n} hitos`,
+        meta:  n
+      });
+    }
   }
 
   // 5. Idioma — solo si de verdad hay repasos esperando
@@ -431,6 +451,19 @@ async function progresoObjetivos(fecha, objetivos) {
       'SELECT count(*) AS n FROM proyecto_tareas WHERE hecha AND completada_en = $1', [fecha]
     ).catch(() => ({ rows: [{ n: 0 }] }));
     val.hito = Number(rows[0].n);
+  }
+  if (objetivos.some(o => o.clave === 'tarea_ns') && poolPanel) {
+    // Se cuenta contra el panel, donde se marcó de verdad. En OKIRO no hay
+    // nada que tocar: marcas la tarea donde trabajas y el objetivo se cumple
+    // solo, que es la regla de toda la misión.
+    const uid = await idEnElPanel().catch(() => 0);
+    const { rows } = uid
+      ? await dbPanel(
+          `SELECT count(*) AS n FROM tareas
+            WHERE hecha AND hecha_en::date = $1::date AND (asignada_a = $2 OR hecha_por = $2)`,
+          [fecha, uid]).catch(() => ({ rows: [{ n: 0 }] }))
+      : { rows: [{ n: 0 }] };
+    val.tarea_ns = Number(rows[0].n);
   }
   if (objetivos.some(o => o.clave === 'ingles') && poolTutor) {
     // `last_review` es la fecha del último repaso de cada palabra: contar las
@@ -512,6 +545,26 @@ async function misionDelDia(fecha) {
 const XP_MISION_CUMPLIDA = 50;
 const XP_MISION_FALLADA  = -25;
 
+// Cómo se cierra una misión, en un solo sitio. Antes esta decisión estaba
+// escrita dos veces —en el push de cierre y en el sellado de días pasados— y
+// las dos decían lo mismo: todo lo que no estuviera completo era 'fallada',
+// −25 XP. Eso incluía los días en los que la misión ni se llegó a abrir, y por
+// ahí se colaron 19 penalizaciones seguidas: el sistema castigaba por no
+// entrar, y un sistema que castiga por no entrar garantiza que no entres.
+//
+// Ahora la exigencia se mantiene donde tiene sentido: **solo cuesta lo que
+// decidiste**. Aceptaste y no lo cumpliste, cuesta. La rechazaste, cuesta
+// igual —decir que no sigue siendo una decisión—. Pero una misión que se
+// ofreció y nunca se abrió caduca sin coste: no es un fallo, es un día en que
+// no estuviste. Tampoco dispara la misión de recuperación del día siguiente.
+function cierreDeMision(m) {
+  if (m.estado === 'ofrecida') return { resultado: 'expirada', xp: 0 };
+  const cumplida = m.completa && m.estado !== 'rechazada';
+  return cumplida
+    ? { resultado: 'cumplida', xp: XP_MISION_CUMPLIDA }
+    : { resultado: 'fallada',  xp: XP_MISION_FALLADA };
+}
+
 // Mismos puntos que enseñaba la app, ahora como única fuente de verdad.
 function xpDelDia(l) {
   let xp = 0;
@@ -576,13 +629,10 @@ async function cerrarMisionesPendientes() {
     const fecha = new Date(r.fecha).toISOString().slice(0, 10);
     try {
       const m = await misionDelDia(fecha);
-      // Rechazarla cuenta como fallarla: la decisión no evita la consecuencia.
-      const cumplida = m.completa && m.estado !== 'rechazada';
+      const { resultado, xp } = cierreDeMision(m);
       await db(
         `UPDATE misiones SET resultado=$1, xp_bonus=$2, cerrada_en=NOW()
-          WHERE fecha=$3 AND resultado IS NULL`,
-        [cumplida ? 'cumplida' : 'fallada',
-         cumplida ? XP_MISION_CUMPLIDA : XP_MISION_FALLADA, fecha]);
+          WHERE fecha=$3 AND resultado IS NULL`, [resultado, xp, fecha]);
     } catch (e) { console.error('cierre de misión', fecha, e.message); }
   }
 }
@@ -845,7 +895,16 @@ const FUENTES = {
   ingles_empezadas:   { etiqueta: 'Inglés · palabras empezadas',    unidad: 'palabras' },
   ingles_palabras:    { etiqueta: 'Inglés · palabras dominadas',    unidad: 'palabras' },
   ingles_situaciones: { etiqueta: 'Inglés · situaciones superadas', unidad: 'situaciones' },
-  ingles_racha:       { etiqueta: 'Inglés · días seguidos estudiando', unidad: 'días seguidos' }
+  ingles_racha:       { etiqueta: 'Inglés · días seguidos estudiando', unidad: 'días seguidos' },
+  // Negocio: los lee del panel del estudio, que corre en el mismo Postgres.
+  // Antes estos números se tecleaban a mano y se quedaban viejos: OKIRO decía
+  // "1 cliente" con dos cobrando, y los proyectos de cliente enseñaban
+  // porcentajes puestos a ojo en julio. El trabajo se hace en el panel; aquí
+  // solo se mide, igual que con tutoringles.
+  ns_clientes:     { etiqueta: 'Estudio · clientes activos',       unidad: 'clientes' },
+  ns_mrr:          { etiqueta: 'Estudio · ingreso recurrente',     unidad: '€/mes' },
+  ns_entregables:  { etiqueta: 'Estudio · entregables cerrados',   unidad: 'entregables' },
+  ns_tareas:       { etiqueta: 'Estudio · tareas cerradas',        unidad: 'tareas' }
 };
 
 // tutoringles vive en el mismo servidor de Postgres, en otra base: misma
@@ -891,6 +950,78 @@ async function valoresIngles() {
   return v;
 }
 
+// ── PANEL DEL ESTUDIO (panel.neumorstudio.com) ───────────
+// Mismo Postgres, otra base: se conecta igual que tutoringles, cambiando solo
+// el nombre. **Solo lectura, y a propósito.** El trabajo del estudio se hace en
+// el panel —ahí están los entregables, las tareas y la contabilidad— y OKIRO no
+// tiene por qué escribir ahí: si marcar en OKIRO cambiara el panel habría dos
+// sitios donde cerrar la misma tarea, que es justo la fricción que se quería
+// quitar. La regla es la de siempre: OKIRO mide y recuerda, el trabajo se hace
+// donde toca.
+const PANEL_URL = process.env.PANEL_URL ||
+  (process.env.DATABASE_URL || '').replace(/\/[^/?]+(\?|$)/, '/neumorstudio$1');
+const poolPanel = PANEL_URL ? new Pool({ connectionString: PANEL_URL }) : null;
+if (poolPanel) poolPanel.on('error', e => console.error('DB panel:', e.message));
+const dbPanel = (q, p) => poolPanel.query(q, p);
+
+// Qué usuario del panel eres tú. Va por correo y no por id a pelo: los ids de
+// una base no tienen por qué coincidir con los de otra, y un número suelto en
+// el código no dice a quién señala.
+const PANEL_EMAIL = process.env.PANEL_EMAIL || 'ejordanherbas@gmail.com';
+let panelUsuarioId = null;
+async function idEnElPanel() {
+  if (panelUsuarioId !== null || !poolPanel) return panelUsuarioId;
+  const { rows } = await dbPanel('SELECT id FROM usuarios WHERE email = $1', [PANEL_EMAIL]);
+  panelUsuarioId = rows.length ? rows[0].id : 0;   // 0 = no está, y no se reintenta cada vez
+  return panelUsuarioId;
+}
+
+// Las tareas del panel que son TUYAS y siguen abiertas. El panel lo comparten
+// tres socios: proponerte cerrar una tarea de otro sería pedirte algo que no
+// depende de ti. Las cifras de negocio (clientes, MRR, entregables) sí van del
+// estudio entero, porque la meta "5 clientes" es de NeumorStudio, no tuya sola.
+async function tareasMiasDelPanel() {
+  if (!poolPanel) return [];
+  const uid = await idEnElPanel();
+  if (!uid) return [];
+  const { rows } = await dbPanel(
+    `SELECT t.id, t.titulo, p.nombre AS proyecto
+       FROM tareas t
+       LEFT JOIN proyectos p ON p.id = t.proyecto_id
+      WHERE NOT t.hecha AND t.asignada_a = $1
+      ORDER BY t.creada_en`, [uid]);
+  return rows;
+}
+
+async function valoresPanel() {
+  const v = {};
+  if (!poolPanel) return v;
+  try {
+    const [cli, mrr, ent, tar] = await Promise.all([
+      // Un cliente cuenta cuando el proyecto está vivo: una propuesta todavía
+      // no es un cliente, y contarla infla el número justo en lo que más duele.
+      dbPanel(`SELECT count(DISTINCT cliente_id) AS n FROM proyectos
+                WHERE estado IN ('en_marcha','mantenimiento') AND cliente_id IS NOT NULL`),
+      dbPanel('SELECT * FROM v_mrr'),
+      dbPanel('SELECT COALESCE(SUM(total),0) AS total, COALESCE(SUM(hechos),0) AS hechos FROM v_progreso'),
+      dbPanel('SELECT count(*) FILTER (WHERE hecha) AS hechas, count(*) AS total FROM tareas')
+    ]);
+    v.ns_clientes    = Number(cli.rows[0].n);
+    // El panel guarda el dinero en céntimos (14,99 €/mes son 1499). Aquí se
+    // enseña en euros: una meta de "10.000 al mes" en céntimos no se lee.
+    v.ns_mrr         = Math.round(Number(mrr.rows[0]?.mrr || 0)) / 100;
+    v.ns_entregables = Number(ent.rows[0].hechos);
+    v.ns_entregables_total = Number(ent.rows[0].total);
+    v.ns_tareas      = Number(tar.rows[0].hechas);
+    v.ns_tareas_total = Number(tar.rows[0].total);
+  } catch (e) {
+    // Si el panel está caído, sus proyectos se quedan con el último valor en
+    // vez de tumbar la pantalla entera. Misma red de seguridad que tutoringles.
+    console.error('valores del panel:', e.message);
+  }
+  return v;
+}
+
 // Una sola tanda de consultas para todos los proyectos automáticos: son cuatro
 // lecturas pequeñas y evitan una consulta por tarjeta.
 async function valoresAutomaticos() {
@@ -932,6 +1063,7 @@ async function valoresAutomaticos() {
     console.error('valores automáticos:', e.message);
   }
   Object.assign(v, await valoresIngles());
+  Object.assign(v, await valoresPanel());
   return v;
 }
 

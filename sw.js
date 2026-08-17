@@ -8,7 +8,7 @@
 // como dos símbolos), y no era solo cosa de los comentarios: el texto de aviso
 // de más abajo es el que sale en la notificación si el push llega sin
 // contenido. Lo vigila tools/test-codificacion.js.
-const VERSION = 'okiro-v7.3.0';
+const VERSION = 'okiro-v7.4.0';
 const STATIC_CACHE = `${VERSION}-static`;
 
 const PRECACHE = [
