@@ -1,4 +1,4 @@
-// OKIRO Backend v7.3.0 — producción
+// OKIRO Backend v7.4.0 — producción
 // Requiere Node 18+ (usa fetch global)
 const express = require('express');
 const fs   = require('fs');
@@ -772,13 +772,20 @@ async function mensajeDeAliento(m, fecha) {
     if (p?.xp > 0)           partes.push(`${p.xp} XP siguen ahí.`);
 
     // Y hacia dónde va: el proyecto con fin declarado más cerca de su meta.
+    // El orden se decide en JS y no en SQL a propósito: la columna
+    // `valor_actual` es el último valor tecleado, y en los proyectos con fuente
+    // automática está viejo. Ordenando en SQL, el aliento decía "NeumorStudio:
+    // 1 de 5 clientes" mientras el panel ya marcaba 2 — animar con un número
+    // que se sabe falso es peor que no animar.
     const { rows } = await db(
-      `SELECT nombre, meta, valor_actual, meta_valor, metrica
+      `SELECT nombre, meta, valor_actual, meta_valor, metrica, fuente
          FROM proyectos
-        WHERE meta_valor > 0 AND valor_actual < meta_valor AND padre_id IS NULL
-        ORDER BY (valor_actual / meta_valor) DESC LIMIT 1`).catch(() => ({ rows: [] }));
-    if (rows.length) {
-      const r = rows[0];
+        WHERE meta_valor > 0 AND padre_id IS NULL`).catch(() => ({ rows: [] }));
+    const conValor = aplicarFuentes(rows, await valoresAutomaticos().catch(() => null))
+      .filter(r => +r.valor_actual < +r.meta_valor)
+      .sort((a, b) => (b.valor_actual / b.meta_valor) - (a.valor_actual / a.meta_valor));
+    if (conValor.length) {
+      const r = conValor[0];
       partes.push(`${r.nombre}: ${(+r.valor_actual)} de ${(+r.meta_valor)} ${r.metrica || ''}. Ahí es donde vas.`);
     }
   } catch (e) { console.error('aliento:', e.message); }
@@ -2954,7 +2961,7 @@ app.patch('/logs/:fecha/nota', async (req, res) => {
 // Devolver el index ante cualquier ruta desconocida taparía además los 404 de
 // la API, que es justo lo que hace falta ver cuando algo se llama mal.
 app.listen(PORT, () => {
-  console.log(`OKIRO Backend v7.3.0 · :${PORT}`);
+  console.log(`OKIRO Backend v7.4.0 · :${PORT}`);
   console.log(`· Auth:  ${APP_TOKEN ? 'ACTIVADA (APP_TOKEN)' : 'DESACTIVADA — define APP_TOKEN en producción'}`);
   if (APP_TOKEN && APP_TOKEN.length < 24) {
     console.warn(`· ⚠ CLAVE DÉBIL: ${APP_TOKEN.length} caracteres. Detrás de esta clave están tu base de datos`);
